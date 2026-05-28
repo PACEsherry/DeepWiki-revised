@@ -1,0 +1,60 @@
+---
+title: SummarySearcher API
+description: API documentation for the SummarySearcher class.
+---
+
+The `SummarySearcher` class provides a simple way to query an index built by [`DocstringIndexer`](/api/docstring-indexer). It takes a search query, embeds it using the same embedding function used for indexing, and retrieves the most semantically similar summaries from the vector database.
+
+## Constructor
+
+**Class: `SummarySearcher`**
+*(defined in `kit/docstring_indexer.py`)*
+
+The `SummarySearcher` is typically initialized with an instance of `DocstringIndexer`. It uses the `DocstringIndexer`'s configured backend and embedding function to perform searches.
+
+```python
+from kit.docstring_indexer import DocstringIndexer, SummarySearcher
+
+# Assuming 'indexer' is an already initialized DocstringIndexer instance
+# indexer = DocstringIndexer(repo=my_repo, summarizer=my_summarizer)
+# indexer.build() # Ensure the index is built
+
+searcher = SummarySearcher(indexer=indexer)
+```
+
+**Parameters:**
+
+*   **`indexer`** (`DocstringIndexer`, required):
+    An instance of `DocstringIndexer` that has been configured and preferably has had its `build()` method called. The `SummarySearcher` will use this indexer's `backend` and `embed_fn`. See the [`DocstringIndexer API docs`](./docstring-indexer) for more details on the indexer.
+
+## Methods
+
+### `search`
+
+**Method: `SummarySearcher.search`**
+*(defined in `kit/docstring_indexer.py`)*
+
+Embeds the given `query` string and searches the vector database (via the indexer's backend) for the `top_k` most similar document summaries.
+
+```python
+query_text = "How is user authentication handled?"
+results = searcher.search(query=query_text, top_k=3)
+
+for result in results:
+    print(f"Found in: {result.get('file_path')} ({result.get('symbol_name')})")
+    print(f"Score: {result.get('score')}")
+    print(f"Summary: {result.get('summary')}")
+    print("----")} 
+```
+
+**Parameters:**
+
+*   **`query`** (`str`, required):
+    The natural language query string to search for.
+*   **`top_k`** (`int`, default: `5`):
+    The maximum number of search results to return.
+
+**Returns:** `List[Dict[str, Any]]`
+
+    A list of dictionaries, where each dictionary represents a search hit.
+    Each hit typically includes metadata, a score, an ID, and the summary text.

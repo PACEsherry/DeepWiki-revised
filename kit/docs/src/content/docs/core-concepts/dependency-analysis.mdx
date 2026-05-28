@@ -1,0 +1,171 @@
+---
+title: Dependency Analysis
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The dependency analysis feature in `kit` allows you to map, visualize, and analyze the relationships between different components in your codebase. This helps you understand complex codebases, identify potential refactoring opportunities, detect circular dependencies, and prepare dependency context for large language models.
+
+## Why Dependency Analysis?
+
+Understanding dependencies in a codebase is crucial for:
+
+- **Codebase Understanding:** Quickly grasp how different modules interact with each other.
+- **Refactoring Planning:** Identify modules with excessive dependencies or cyclic relationships that might benefit from refactoring.
+- **Technical Debt Assessment:** Map dependencies to visualize potential areas of technical debt or architectural concerns.
+- **Impact Analysis:** Determine the potential impact of changes to specific components.
+- **LLM Context Preparation:** Generate concise, structured descriptions of codebase architecture for LLM context.
+
+## Getting Started
+
+You can access the dependency analyzer through the `Repository` object:
+
+```python
+from kit import Repository
+
+# Load your codebase
+repo = Repository("/path/to/your/codebase")
+
+# Get a language-specific dependency analyzer
+# Currently supports 'python' and 'terraform'
+analyzer = repo.get_dependency_analyzer('python')  # or 'terraform'
+
+# Build the dependency graph
+graph = analyzer.build_dependency_graph()
+
+print(f"Found {len(graph)} components in the dependency graph")
+```
+
+## Exploring Dependencies
+
+Once you've built the dependency graph, you can explore it in various ways:
+
+```python
+# Find cycles (circular dependencies)
+cycles = analyzer.find_cycles()
+if cycles:
+    print(f"Found {len(cycles)} circular dependencies:")
+    for cycle in cycles[:5]:
+        print(f"  {' → '.join(cycle)} → {cycle[0]}")
+
+# Get dependencies for a specific module
+module_deps = analyzer.get_dependencies('module_name')
+print(f"Module depends on: {module_deps}")
+
+# Get dependents (modules that depend on a specific module)
+dependents = analyzer.get_dependents('module_name')
+print(f"Modules that depend on this: {dependents}")
+```
+
+## Visualizing Dependencies
+
+You can visualize the dependency graph using common formats like DOT, GraphML, or JSON:
+
+```python
+# Export to DOT format (for use with tools like Graphviz)
+analyzer.export_dependency_graph(
+    output_format="dot",
+    output_path="dependency_graph.dot"
+)
+
+# Generate a PNG visualization
+analyzer.visualize_dependencies(
+    output_path="dependency_visualization.png",
+    format="png"  # supports 'png', 'svg', or 'pdf'
+)
+```
+
+<Aside type="note">
+  Visualization requires the Graphviz software to be installed on your system.
+</Aside>
+
+## LLM Context Generation
+
+One of the most powerful features of the dependency analyzer is its ability to generate concise, LLM-friendly context about your codebase structure:
+
+```python
+# Generate markdown context for LLMs
+context = analyzer.generate_llm_context(
+    output_format="markdown",
+    output_path="dependency_context.md",
+    max_tokens=4000  # approximate token limit
+)
+```
+
+The generated context includes:
+- Overall statistics (component count, type breakdown)
+- Key components with high connectivity
+- Circular dependency information
+- Language-specific insights (e.g., import patterns for Python, resource relationships for Terraform)
+
+## Language-Specific Features
+
+### Python Dependency Analysis
+
+The Python dependency analyzer maps import relationships between modules:
+
+```python
+# Get a Python-specific analyzer
+python_analyzer = repo.get_dependency_analyzer('python')
+
+# Build the graph
+python_analyzer.build_dependency_graph()
+
+# Find standard library vs. third-party dependencies
+report = python_analyzer.generate_dependency_report()
+print(f"Standard library imports: {len(report['standard_library_imports'])}")
+print(f"Third-party imports: {len(report['third_party_imports'])}")
+```
+
+### Terraform Dependency Analysis
+
+The Terraform dependency analyzer maps relationships between infrastructure resources:
+
+```python
+# Get a Terraform-specific analyzer
+terraform_analyzer = repo.get_dependency_analyzer('terraform')
+
+# Build the graph
+terraform_analyzer.build_dependency_graph()
+
+# Find all resources of a specific type
+s3_buckets = terraform_analyzer.get_resource_by_type("aws_s3_bucket")
+```
+
+Each resource in the graph includes its absolute file path, making it easy to locate resources in complex infrastructure codebases:
+
+```
+aws_launch_template.app (aws_launch_template) [File: /path/to/your/project/compute.tf]
+```
+
+<Aside type="tip">
+  For complete API details, including all available methods and options, see the **[DependencyAnalyzer API Reference](/api/dependency-analyzer/)**.
+</Aside>
+
+## Advanced Usage
+
+### Custom Dependency Analysis
+
+If you have specific needs for your dependency analysis, you can extend the base `DependencyAnalyzer` class to create analyzers for other languages or frameworks:
+
+```python
+from kit.dependency_analyzer import DependencyAnalyzer
+
+class CustomDependencyAnalyzer(DependencyAnalyzer):
+    # Implement required abstract methods
+    def build_dependency_graph(self):
+        # Your custom logic here
+        pass
+        
+    def export_dependency_graph(self, output_format="json", output_path=None):
+        # Your custom export logic here
+        pass
+        
+    def find_cycles(self):
+        # Your custom cycle detection logic here
+        pass
+        
+    def visualize_dependencies(self, output_path, format="png"):
+        # Your custom visualization logic here
+        pass
+```

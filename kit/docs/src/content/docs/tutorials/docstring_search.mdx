@@ -1,0 +1,61 @@
+---
+title: Build a Docstring Search Engine
+---
+
+In this tutorial you'll build a semantic search tool on top of `kit`
+using **docstring-based indexing**. 
+
+Why docstrings?  Summaries distill *intent* rather than syntax.  Embedding these
+short natural-language strings lets the vector DB focus on meaning, giving you
+relevant hits even when the literal code differs (e.g., `retry()` vs
+`attempt_again()`).  It also keeps the index small (one embedding per file or
+symbol instead of dozens of raw-code chunks).
+
+---
+
+## 1. Install dependencies
+
+```bash
+uv pip install kit sentence-transformers chromadb
+```
+
+## 2. Initialise a repo and summarizer
+
+```python
+import kit
+from kit import Repository, DocstringIndexer, Summarizer, SummarySearcher
+from sentence_transformers import SentenceTransformer
+
+REPO_PATH = "/path/to/your/project"
+repo = Repository(REPO_PATH)
+
+summarizer = repo.get_summarizer()  # defaults to OpenAIConfig
+```
+
+## 3. Build the docstring index
+
+```python
+embed_model = SentenceTransformer("all-MiniLM-L6-v2")
+embed_fn = lambda txt: embed_model.encode(txt).tolist()
+
+indexer = DocstringIndexer(repo, summarizer, embed_fn)
+indexer.build()          # writes REPO_PATH/.kit_cache/docstring_db
+```
+
+The first run will take time depending on repo size and LLM latency.
+Summaries are cached inside the vector DB (and in a meta.json within the persist_dir), 
+so subsequent runs are cheap if code hasn't changed.
+
+## 4. Query the index
+
+```python
+searcher = indexer.get_searcher()
+
+results = searcher.search("How is the retry back-off implemented?", top_k=3)
+for hit in results:
+    print(f"→ File: {hit.get('file_path', 'N/A')}\n  Summary: {hit.get('summary', 'N/A')}")
+```
+
+You now have a semantic code searcher, using powerful docstring summaries,
+as easy as that.
+

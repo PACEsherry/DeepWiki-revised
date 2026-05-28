@@ -1,0 +1,48 @@
+---
+title: Running Tests
+---
+
+To run tests using uv and pytest, first ensure you have the development dependencies installed:
+
+```sh
+# Install all deps
+uv pip install -e .
+```
+
+Then, run the full test suite using:
+
+```sh
+uv run pytest
+```
+
+Or to run a specific test file:
+
+```sh
+uv run pytest tests/test_hcl_symbols.py
+```
+
+## Code Style and Formatting
+
+Kit uses [Ruff](https://docs.astral.sh/ruff/) for linting, formatting, and import sorting with a line length of 120 characters. Our configuration can be found in `pyproject.toml`.
+
+To check your code against our style guidelines:
+
+```sh
+# Run linting checks
+ruff check .
+
+# Check format (doesn't modify files)
+ruff format --check .
+```
+
+To automatically fix linting issues and format your code:
+
+```sh
+# Fix linting issues
+ruff check --fix .
+
+# Format code
+ruff format .
+```
+
+These checks are enforced in CI, so we recommend running them locally before pushing changes.

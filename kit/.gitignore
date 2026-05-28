@@ -1,0 +1,76 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+.venv/
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+test_repo*
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# mypy
+.mypy_cache/
+.dmypy.json
+
+# VSCode
+.vscode/
+
+# macOS
+.DS_Store
+.vercel
+
+# Kit specific cache and data directory
+.kit/
+# .kit/docstring_db/ # Covered by .kit/
+
+# Test results and matrix testing artifacts
+test-results/
+# Ignore JSON artifacts only in test-results folder
+test-results/*.json
+
+# Pycharm
+.idea/
+
+.claude
+
+# kit-mcp-site Next.js artifacts
+kit-mcp-site/node_modules/
+kit-mcp-site/.next/
+kit-mcp-site/next-env.d.ts

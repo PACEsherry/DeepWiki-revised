@@ -1,0 +1,1200 @@
+---
+title: Command Line Interface
+description: Complete guide to kit's CLI commands for repository analysis, symbol extraction, and AI-powered workflows
+sidebar:
+  order: 3
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+kit provides a comprehensive command-line interface for repository analysis, symbol extraction, and AI-powered development workflows. All commands support both human-readable and machine-readable output formats for seamless integration with other tools.
+
+## Installation & Setup
+
+```bash
+# Install kit
+uv pip install cased-kit
+
+# Verify installation
+kit --version
+
+# Get help for any command
+kit --help
+kit <command> --help
+```
+
+## Core Commands
+
+### Repository Analysis
+
+#### `kit symbols`
+
+Extract symbols (functions, classes, variables) from a repository with intelligent caching for 25-36x performance improvements.
+
+```bash
+kit symbols <repository-path> [OPTIONS]
+```
+
+**Options:**
+- `--format, -f <format>`: Output format (`table`, `json`, `names`, `plain`)
+- `--pattern, -p <pattern>`: File pattern filter (e.g., `*.py`, `src/**/*.js`)
+- `--output, -o <file>`: Save output to file
+- `--type, -t <type>`: Filter by symbol type (`function`, `class`, `variable`, etc.)
+
+**Examples:**
+
+```bash
+# Extract all symbols (uses incremental analysis for speed)
+kit symbols /path/to/repo
+
+# Get only Python functions as JSON
+kit symbols /path/to/repo --pattern "*.py" --type function --format json
+
+# Export to file for further analysis
+kit symbols /path/to/repo --output symbols.json
+
+# Quick symbol names for scripting
+kit symbols /path/to/repo --format names | grep "test_"
+```
+
+#### `kit file-tree`
+
+Display repository structure with file type indicators and statistics.
+
+```bash
+kit file-tree <repository-path> [OPTIONS]
+```
+
+**Options:**
+- `--path, -p <subpath>`: Subdirectory path to show tree for (relative to repo root)
+- `--output, -o <file>`: Save output to file
+
+**Examples:**
+
+```bash
+# Show full repository structure
+kit file-tree /path/to/repo
+
+# Show structure for specific subdirectory
+kit file-tree /path/to/repo --path src
+kit file-tree /path/to/repo -p src/components
+
+# Export structure as JSON
+kit file-tree /path/to/repo --output structure.json
+
+# Analyze specific directory and export
+kit file-tree /path/to/repo --path src/api --output api-structure.json
+```
+
+#### `kit search`
+
+Fast text search across repository files with regex support.
+
+```bash
+kit search <repository-path> <query> [OPTIONS]
+```
+
+**Options:**
+- `--pattern, -p <pattern>`: File pattern filter
+- `--output, -o <file>`: Save output to file
+
+**Examples:**
+
+```bash
+# Search for function definitions
+kit search /path/to/repo "def.*login"
+
+# Search in specific files
+kit search /path/to/repo "TODO" --pattern "*.py"
+```
+
+#### `kit search-semantic`
+
+AI-powered semantic search using vector embeddings to find code by meaning rather than keywords. Requires `sentence-transformers` package.
+
+```bash
+kit search-semantic <repository-path> <query> [OPTIONS]
+```
+
+**Options:**
+- `--top-k, -k <count>`: Maximum number of results to return (default: 5)
+- `--output, -o <file>`: Save output to JSON file
+- `--embedding-model, -e <model>`: SentenceTransformers model name (default: all-MiniLM-L6-v2)
+- `--chunk-by, -c <strategy>`: Chunking strategy: 'symbols' or 'lines' (default: symbols)
+- `--build-index/--no-build-index`: Force rebuild of vector index (default: false)
+- `--persist-dir, -p <dir>`: Directory to persist vector index
+- `--format, -f <format>`: Output format: 'table', 'json', or 'plain' (default: json)
+
+**Index Management:**
+The vector index is automatically built on first use and persisted for subsequent searches. Use `--build-index` to force a rebuild when the codebase changes significantly.
+
+**Examples:**
+
+```bash
+# Find authentication-related code (builds index on first run)
+kit search-semantic /path/to/repo "authentication logic"
+
+# Force rebuild index after major code changes
+kit search-semantic /path/to/repo "new feature" --build-index
+
+# Search for error handling patterns (uses existing index)
+kit search-semantic /path/to/repo "error handling patterns" --top-k 10
+
+# Use line-based chunking for better granularity
+kit search-semantic /path/to/repo "database connection" --chunk-by lines
+
+# Use a different embedding model
+kit search-semantic /path/to/repo "user registration" --embedding-model all-mpnet-base-v2
+
+# Export results to JSON
+kit search-semantic /path/to/repo "API endpoints" --output semantic-results.json
+
+# Search without rebuilding index (if already built)
+kit search-semantic /path/to/repo "payment processing" --no-build-index
+
+# Get plain output for piping to other tools
+kit search-semantic /path/to/repo "error handling" --format plain | head -5
+
+# Get JSON output for programmatic processing
+kit search-semantic /path/to/repo "database queries" --format json | jq '.[] | .file'
+```
+
+**Setup Requirements:**
+
+```bash
+# Install sentence-transformers for semantic search
+pip install sentence-transformers
+
+# Or install kit with semantic search support
+pip install 'cased-kit[ml]'  # minimal extras for semantic search
+# Or install kit with all optional extras
+pip install 'cased-kit[all]'  
+```
+
+**Note:** First run will download the embedding model and build the vector index, which may take time depending on repository size.
+
+#### `kit grep`
+
+Perform fast literal grep search on repository files using system grep. By default, excludes common build directories, cache folders, and hidden directories for optimal performance.
+
+```bash
+kit grep <repository-path> <pattern> [OPTIONS]
+```
+
+**Options:**
+- `--case-sensitive/--ignore-case, -c/-i`: Case sensitive search (default: case-sensitive)
+- `--include <pattern>`: Include files matching glob pattern (e.g., '*.py')
+- `--exclude <pattern>`: Exclude files matching glob pattern
+- `--max-results, -n <count>`: Maximum number of results to return (default: 1000)
+- `--directory, -d <path>`: Limit search to specific directory within repository
+- `--include-hidden`: Include hidden directories in search (default: false)
+- `--output, -o <file>`: Save output to JSON file
+
+**Automatic Exclusions:**
+By default, kit grep excludes common directories for better performance:
+- **Build/Cache**: `__pycache__`, `node_modules`, `dist`, `build`, `target`, `.cache`
+- **Hidden**: `.git`, `.vscode`, `.idea`, `.github`, `.terraform`
+- **Virtual Environments**: `.venv`, `venv`, `.tox`
+- **Language-Specific**: `vendor` (Go/PHP), `deps` (Elixir), `_build` (Erlang)
+
+**Examples:**
+
+```bash
+# Basic literal search (excludes common directories automatically)
+kit grep /path/to/repo "TODO"
+
+# Case insensitive search
+kit grep /path/to/repo "function" --ignore-case
+
+# Search only in specific directory
+kit grep /path/to/repo "class" --directory "src/api"
+
+# Search only Python files in src directory
+kit grep /path/to/repo "class" --include "*.py" --directory "src"
+
+# Include hidden directories (search .github, .vscode, etc.)
+kit grep /path/to/repo "workflow" --include-hidden
+
+# Exclude test files but include hidden dirs
+kit grep /path/to/repo "import" --exclude "*test*" --include-hidden
+
+# Complex filtering with directory limitation
+kit grep /path/to/repo "api_key" --include "*.py" --exclude "*test*" --directory "src" --ignore-case
+
+# Limit results and save to file
+kit grep /path/to/repo "error" --max-results 50 --output errors.json
+```
+
+**Performance Tips:**
+- Use `--directory` to limit search scope in large repositories
+- Default exclusions make searches 3-5x faster in typical projects
+- Use `--include-hidden` only when specifically searching configuration files
+- For regex patterns, use `kit search` instead
+
+**Note:** Requires system `grep` command to be available in PATH. For cross-platform regex search, use `kit search` instead.
+
+#### `kit dependencies`
+
+Analyze and visualize code dependencies within a repository. Supports Python and Terraform dependency analysis with features including dependency graph generation, circular dependency detection, module-specific analysis, and visualization generation.
+
+```bash
+kit dependencies <repository-path> --language <language> [OPTIONS]
+```
+
+**Options:**
+- `--language, -l <language>`: Language to analyze (required: `python`, `terraform`)
+- `--output, -o <file>`: Output to file instead of stdout
+- `--format, -f <format>`: Output format (`json`, `dot`, `graphml`, `adjacency`)
+- `--visualize, -v`: Generate visualization (requires Graphviz)
+- `--viz-format <format>`: Visualization format (`png`, `svg`, `pdf`)
+- `--cycles, -c`: Show only circular dependencies
+- `--llm-context`: Generate LLM-friendly context description
+- `--module, -m <name>`: Analyze specific module/resource
+- `--include-indirect, -i`: Include indirect dependencies (for module analysis)
+
+**Examples:**
+
+```bash
+# Analyze Python dependencies with JSON output
+kit dependencies /path/to/repo --language python
+
+# Generate DOT format for Graphviz
+kit dependencies /path/to/repo --language python --format dot --output deps.dot
+
+# Create visualization directly
+kit dependencies /path/to/repo --language terraform --visualize --viz-format svg
+
+# Check for circular dependencies
+kit dependencies /path/to/repo --language python --cycles
+
+# Analyze specific Python module
+kit dependencies /path/to/repo --language python --module "myproject.auth" --include-indirect
+
+# Generate LLM context for AI analysis
+kit dependencies /path/to/repo --language python --llm-context --output context.md
+
+# Terraform infrastructure analysis
+kit dependencies /path/to/repo --language terraform --format graphml --output infrastructure.graphml
+
+# Combined analysis with visualization
+kit dependencies /path/to/repo --language python --cycles --visualize --output analysis.json
+```
+
+**Sample Output:**
+```
+🔍 Analyzing python dependencies...
+📊 Found 127 components in the dependency graph
+📈 Summary: 45 internal, 82 external dependencies
+✅ No circular dependencies found!
+```
+
+**Visualization Requirements:**
+- Install Graphviz: `brew install graphviz` (macOS) or `apt-get install graphviz` (Linux)
+- Supports PNG, SVG, and PDF output formats
+
+#### `kit usages`
+
+Find all usages of a specific symbol across the repository.
+
+```bash
+kit usages <repository-path> <symbol-name> [OPTIONS]
+```
+
+**Options:**
+- `--symbol-type, -t <type>`: Filter by symbol type
+- `--output, -o <file>`: Save output to file
+- `--format, -f <format>`: Output format
+
+**Examples:**
+
+```bash
+# Find all usages of a function
+kit usages /path/to/repo "calculate_total"
+
+# Find class usages with JSON output
+kit usages /path/to/repo "UserModel" --symbol-type class --format json
+```
+
+### Cache Management
+
+#### `kit cache`
+
+Manage the incremental analysis cache for optimal performance.
+
+```bash
+kit cache <action> <repository-path> [OPTIONS]
+```
+
+**Actions:**
+- `status`: Show cache statistics and health
+- `clear`: Clear all cached data
+- `cleanup`: Remove stale entries for deleted files
+- `stats`: Show detailed performance statistics
+
+**Examples:**
+
+```bash
+# Check cache status
+kit cache status /path/to/repo
+
+# Clear cache if needed
+kit cache clear /path/to/repo
+
+# Clean up stale entries
+kit cache cleanup /path/to/repo
+
+# View detailed statistics
+kit cache stats /path/to/repo
+```
+
+**Sample Output:**
+```
+Cache Statistics:
+  Cached files: 1,234
+  Total symbols: 45,678
+  Cache size: 12.3MB
+  Cache directory: /path/to/repo/.kit/incremental_cache
+  Hit rate: 85.2%
+  Files analyzed: 156
+  Cache hits: 1,078
+  Cache misses: 156
+  Average analysis time: 0.023s
+```
+
+### AI-Powered Workflows
+
+#### `kit summarize`
+
+Generate AI-powered pull request summaries with optional PR body updates.
+
+```bash
+kit summarize <pr-url> [OPTIONS]
+```
+
+**Options:**
+- `--plain, -p`: Output raw summary content (no formatting)
+- `--dry-run, -n`: Generate summary without posting to GitHub
+- `--model, -m <model>`: Override LLM model for this summary
+- `--config, -c <file>`: Use custom configuration file
+- `--update-pr-body`: Add summary to PR description
+
+**Examples:**
+
+```bash
+# Generate and post PR summary
+kit summarize https://github.com/owner/repo/pull/123
+
+# Dry run (preview without posting)
+kit summarize --dry-run https://github.com/owner/repo/pull/123
+
+# Update PR body with summary
+kit summarize --update-pr-body https://github.com/owner/repo/pull/123
+
+# Use specific model
+kit summarize --model claude-haiku-4-5 https://github.com/owner/repo/pull/123
+
+# Clean output for piping
+kit summarize --plain https://github.com/owner/repo/pull/123
+```
+
+#### `kit commit`
+
+Generate intelligent commit messages from staged git changes.
+
+```bash
+kit commit [repository-path] [OPTIONS]
+```
+
+**Options:**
+- `--dry-run, -n`: Show generated message without committing
+- `--model, -m <model>`: Override LLM model
+- `--config, -c <file>`: Use custom configuration file
+
+**Examples:**
+
+```bash
+# Generate and commit with AI message
+git add .
+kit commit
+
+# Preview message without committing
+git add src/auth.py
+kit commit --dry-run
+
+# Use specific model
+kit commit --model gpt-4.1-mini
+
+# Specify repository path
+kit commit /path/to/repo --dry-run
+```
+
+**Sample Output:**
+```
+Generated commit message:
+feat(auth): add JWT token validation middleware
+
+- Implement JWTAuthMiddleware for request authentication
+- Add token validation with signature verification
+- Include error handling for expired and invalid tokens
+- Update middleware registration in app configuration
+
+Commit? [y/N]: y
+```
+
+#### `kit package-search-grep`
+
+Search through source code of popular packages using regex patterns (requires Chroma API key). Outputs in plain grep-style format by default for pipe-friendly scripting.
+
+```bash
+kit package-search-grep <package> <pattern> [OPTIONS]
+```
+
+**Options:**
+- `--max-results, -m <count>`: Maximum number of results (default: 20)
+- `--file-pattern, -f <pattern>`: Filter files by glob pattern (e.g., '*.py')
+- `--case-sensitive, -c` / `--ignore-case, -i`: Case sensitivity
+- `--json, -j`: Output as JSON with full metadata
+- `--formatted, -F`: Output with formatting and emojis (default is plain like grep)
+
+**Examples:**
+
+```bash
+# Find all async functions in FastAPI (plain grep-style output)
+kit package-search-grep fastapi "async def \w+" --max-results 10
+
+# Search for decorators in Flask with pipe-friendly output
+kit package-search-grep flask "@app\\.route" -f "*.py" | head -5
+
+# Get structured JSON output for programmatic processing
+kit package-search-grep numpy "def.*fft" --json | jq '.[] | .file_path'
+
+# Pretty formatted output with emojis
+kit package-search-grep django "class.*Model" --formatted
+```
+
+#### `kit package-search-hybrid`
+
+Perform semantic search in package source code with optional regex filtering.
+
+```bash
+kit package-search-hybrid <package> <query> [OPTIONS]
+```
+
+**Options:**
+- `--max-results, -m <count>`: Maximum results (default: 20)
+- `--regex-filter, -r <pattern>`: Filter with regex pattern
+- `--file-pattern, -f <pattern>`: Filter files by glob pattern
+- `--json, -j`: Output as JSON with full metadata
+- `--plain, -p`: Output plain text without formatting
+
+**Examples:**
+
+```bash
+# Find HTTP functionality in requests
+kit package-search-hybrid requests "HTTP connection pooling and retry logic"
+
+# Search with regex filter and JSON output
+kit package-search-hybrid numpy "fast fourier transform" -r "def.*fft" --json
+
+# Plain output for piping
+kit package-search-hybrid flask "route handling" --plain | head -10
+```
+
+#### `kit package-search-read`
+
+Read specific files from package source code.
+
+```bash
+kit package-search-read <package> <file-path> [OPTIONS]
+```
+
+**Options:**
+- `--start-line, -s <line>`: Starting line number
+- `--end-line, -e <line>`: Ending line number
+- `--json, -j`: Output as JSON with metadata
+- `--plain, -p`: Output plain text without formatting
+
+**Examples:**
+
+```bash
+# Read entire file with header
+kit package-search-read requests "requests/models.py"
+
+# Read specific lines in plain format
+kit package-search-read flask "flask/app.py" -s 100 -e 200 --plain
+
+# Get JSON output with metadata
+kit package-search-read numpy "numpy/__init__.py" --json
+```
+
+**Configuration:**
+Set the `CHROMA_PACKAGE_SEARCH_API_KEY` environment variable or get a key from [Chroma Cloud](https://cloud.trychroma.com).
+
+### Content Processing
+
+#### `kit context`
+
+Extract contextual code around specific lines for LLM analysis.
+
+```bash
+kit context <repository-path> <file-path> <line-number> [OPTIONS]
+```
+
+**Options:**
+- `--lines, -n <count>`: Context lines around target (default: 10)
+- `--output, -o <file>`: Save output to JSON file
+
+**Examples:**
+
+```bash
+# Get context around a specific line
+kit context /path/to/repo src/main.py 42
+
+# Export context for analysis
+kit context /path/to/repo src/utils.py 15 --output context.json
+```
+
+#### `kit chunk-lines`
+
+Split file content into line-based chunks for LLM processing.
+
+```bash
+kit chunk-lines <repository-path> <file-path> [OPTIONS]
+```
+
+**Options:**
+- `--max-lines, -n <count>`: Maximum lines per chunk (default: 50)
+- `--output, -o <file>`: Save output to JSON file
+
+**Examples:**
+
+```bash
+# Default chunking (50 lines)
+kit chunk-lines /path/to/repo src/large-file.py
+
+# Smaller chunks for detailed analysis
+kit chunk-lines /path/to/repo src/main.py --max-lines 20
+
+# Export chunks for LLM processing
+kit chunk-lines /path/to/repo src/main.py --output chunks.json
+```
+
+#### `kit chunk-symbols`
+
+Split file content by code symbols (functions, classes) for semantic chunking.
+
+```bash
+kit chunk-symbols <repository-path> <file-path> [OPTIONS]
+```
+
+**Options:**
+- `--output, -o <file>`: Save output to JSON file
+
+**Examples:**
+
+```bash
+# Chunk by symbols (functions, classes)
+kit chunk-symbols /path/to/repo src/main.py
+
+# Export symbol-based chunks
+kit chunk-symbols /path/to/repo src/api.py --output symbol-chunks.json
+```
+
+### Export Operations
+
+#### `kit export`
+
+Export repository data to structured JSON files for external tools and analysis.
+
+```bash
+kit export <repository-path> <data-type> <output-file> [OPTIONS]
+```
+
+**Data Types:**
+- `index`: Complete repository index (files + symbols)
+- `symbols`: All extracted symbols
+- `file-tree`: Repository file structure
+- `symbol-usages`: Usages of a specific symbol
+
+**Options:**
+- `--symbol <name>`: Symbol name (required for `symbol-usages`)
+- `--symbol-type <type>`: Symbol type filter (for `symbol-usages`)
+
+**Examples:**
+
+```bash
+# Export complete repository analysis
+kit export /path/to/repo index complete-analysis.json
+
+# Export only symbols
+kit export /path/to/repo symbols symbols.json
+
+# Export file structure
+kit export /path/to/repo file-tree structure.json
+
+# Export symbol usage analysis
+kit export /path/to/repo symbol-usages api-usages.json --symbol "ApiClient"
+
+# Export specific symbol type usage
+kit export /path/to/repo symbol-usages class-usages.json --symbol "User" --symbol-type class
+```
+
+### Server Operations
+
+#### `kit serve`
+
+Run the kit REST API server for web integrations and remote access.
+
+```bash
+kit serve [OPTIONS]
+```
+
+**Options:**
+- `--host <host>`: Server host (default: 0.0.0.0)
+- `--port <port>`: Server port (default: 8000)
+- `--reload/--no-reload`: Auto-reload on changes (default: True)
+
+**Examples:**
+
+```bash
+# Start development server
+kit serve
+
+# Production configuration
+kit serve --host 127.0.0.1 --port 9000 --no-reload
+
+# Custom port for testing
+kit serve --port 3000
+```
+
+### PR Review Operations
+
+<Aside type="note">
+**Want to build a custom PR reviewer?** This section covers kit's production-ready PR reviewer. For a tutorial on building your own custom reviewer using kit's components, see [Build an AI PR Reviewer](/tutorials/ai_pr_reviewer).
+</Aside>
+
+#### `kit review`
+
+AI-powered GitHub pull request reviewer that provides comprehensive code analysis with full repository context. The reviewer clones repositories, analyzes symbol relationships, and generates intelligent reviews using Claude or GPT-4.
+
+```bash
+kit review <pr-url> [OPTIONS]
+```
+
+**Options:**
+- `--plain, -p`: Output raw review content for piping (no formatting)
+- `--dry-run, -n`: Generate review without posting to GitHub (shows formatted preview)
+- `--model, -m <model>`: Override LLM model for this review
+- `--config, -c <file>`: Use custom configuration file
+- `--init-config`: Create default configuration file
+- `--agentic`: Use multi-turn agentic analysis (higher cost, deeper analysis)
+- `--agentic-turns <count>`: Number of analysis turns for agentic mode
+
+**Examples:**
+
+```bash
+# Review and post comment
+kit review https://github.com/owner/repo/pull/123
+
+# Dry run (formatted preview without posting)
+kit review --dry-run https://github.com/owner/repo/pull/123
+
+# Clean output for piping to other tools
+kit review --plain https://github.com/owner/repo/pull/123
+kit review -p https://github.com/owner/repo/pull/123
+
+# Override model for specific review
+kit review --model gpt-4.1-nano https://github.com/owner/repo/pull/123
+kit review -m claude-haiku-4-5 https://github.com/owner/repo/pull/123
+
+# Pipe to Claude Code for implementation
+kit review -p https://github.com/owner/repo/pull/123 | \
+  claude "Implement these code review suggestions"
+
+# Use agentic mode for complex PRs
+kit review --agentic --agentic-turns 15 https://github.com/owner/repo/pull/123
+
+# Initialize configuration
+kit review --init-config
+```
+
+#### Quick Setup
+
+**1. Install and configure:**
+```bash
+# Install kit
+uv pip install cased-kit
+
+# Set up configuration
+kit review --init-config
+
+# Set API keys
+export KIT_GITHUB_TOKEN="ghp_your_token"
+export KIT_ANTHROPIC_TOKEN="sk-ant-your_key"
+```
+
+**2. Review code:**
+```bash
+# Review a GitHub PR
+kit review https://github.com/owner/repo/pull/123
+
+# Review local changes
+kit review main..feature
+```
+
+#### Configuration
+
+The reviewer uses `~/.kit/review-config.yaml` for configuration:
+
+```yaml
+github:
+  token: ghp_your_token_here
+  base_url: https://api.github.com.com
+
+llm:
+  provider: anthropic  # or "openai"
+  model: claude-sonnet-4-5
+  api_key: sk-ant-your_key_here
+  max_tokens: 4000
+  temperature: 0.1
+
+review:
+  analysis_depth: standard  # quick, standard, thorough
+  post_as_comment: true
+  clone_for_analysis: true
+  cache_repos: true
+  cache_directory: ~/.kit/repo-cache
+  cache_ttl_hours: 24
+```
+#### Model Selection
+
+**Frontier Tier ($3-15/MTok)**
+- `claude-opus-4-20250514`: Latest flagship, superior complex reasoning
+- `claude-sonnet-4-5`: High-performance with exceptional reasoning (recommended)
+- `gpt-5.1`: Latest OpenAI model with adaptive reasoning
+
+**Balanced Tier ($0.10-1/MTok)**
+- `gpt-4.1`: Good balance of performance and cost
+- `gpt-4.1-mini`: Budget-friendly with solid capability
+- `claude-haiku-4-5`: Ultra-fast and economical
+
+**Budget Tier ($0.0015-0.01/MTok)**
+- `gpt-4.1-nano`: Ultra-budget, high-volume use
+- `gemini-2.5-flash`: Excellent value, fast
+- `gemini-1.5-flash-8b`: Ultra-budget option
+
+#### Cache Management
+
+```bash
+# Check cache status
+kit review-cache status
+
+# Clean up old repositories
+kit review-cache cleanup
+
+# Clear all cached repositories
+kit review-cache clear
+```
+
+#### Enterprise Usage
+
+**Batch Review:**
+```bash
+# Review multiple PRs
+for pr in 123 124 125; do
+  kit review https://github.com/company/repo/pull/$pr
+done
+```
+
+**CI/CD Integration:**
+```yaml
+# .github/workflows/pr-review.yml
+name: AI PR Review
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: AI Review
+        run: |
+          uv pip install cased-kit
+          kit review --dry-run ${{ github.event.pull_request.html_url }}
+        env:
+          KIT_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KIT_ANTHROPIC_TOKEN: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+#### Cost Analysis
+
+**Real-world costs by team size:**
+
+*Small Team (20 PRs/month):*
+- Standard mode: $0.20-1.00/month
+- Mixed usage: $1.00-5.00/month
+
+*Enterprise (500 PRs/month):*
+- Standard mode: $5.00-25.00/month  
+- Mixed usage: $25.00-150.00/month
+
+**Cost per PR by complexity:**
+- Simple (1-2 files): $0.005-0.025
+- Medium (3-5 files): $0.01-0.05
+- Complex (6+ files): $0.025-0.10
+
+#### Features
+
+**Intelligent Analysis:**
+- Repository cloning with caching for 5-10x faster repeat reviews
+- Symbol extraction and cross-codebase impact analysis
+- Security, architecture, and performance assessment
+- Multi-language support for any language kit supports
+
+**Cost Transparency:**
+- Real-time cost tracking with exact LLM usage
+- Token breakdown (input/output) for cost optimization
+- Model information and pricing details
+
+**Enterprise Features:**
+- GitHub integration with classic and fine-grained tokens
+- Multiple LLM provider support (Anthropic Claude, OpenAI GPT-4)
+- Configurable analysis depth and review modes
+- Repository caching and batch operations
+
+#### Example Output
+
+```markdown
+## 🛠️ Kit AI Code Review
+
+### Summary & Implementation
+This PR introduces a new authentication middleware that validates JWT tokens...
+
+### Code Quality Assessment
+The implementation follows clean code principles with appropriate error handling...
+
+### Cross-Codebase Impact Analysis
+- **AuthMiddleware**: Used in 15 other places across the codebase
+- **validateToken**: New function will be called by 8 existing routes
+- Breaking change risk: Low (additive changes only)
+
+### Security & Reliability
+✅ Proper JWT validation with signature verification
+⚠️ Consider adding rate limiting for failed authentication attempts
+
+### Specific Issues & Recommendations
+1. **Line 42 in auth.py**: Consider using constant-time comparison
+2. **Line 67 in middleware.py**: Add input validation for token format
+
+---
+*Generated by kit v0.3.3 with claude-sonnet-4 analysis*
+```
+
+## Output Formats
+
+### Human-Readable Formats
+
+- **Table**: Structured columns for easy reading
+- **Plain Text**: Simple text output for basic parsing
+- **Icons**: File type indicators (📄 for files, 📁 for directories)
+
+### Machine-Readable Formats
+
+- **JSON**: Structured data perfect for further processing
+- **Names**: Simple lists for Unix pipeline operations
+
+### Piping & Integration
+
+All commands work seamlessly with Unix tools:
+
+```bash
+# Count Python files
+kit file-tree /path/to/repo | grep "\.py" | wc -l
+
+# Find large functions (over 50 lines)
+kit symbols /path/to/repo --format json | jq '.[] | select(.end_line - .start_line > 50)'
+
+# Get unique function names
+kit symbols /path/to/repo --format names | sort | uniq
+
+# Find files with many symbols
+kit symbols /path/to/repo --format json | jq -r '.[] | .file' | sort | uniq -c | sort -nr
+```
+
+## Practical Workflows
+
+### Development Workflow with Caching
+
+```bash
+#!/bin/bash
+REPO_PATH="/path/to/repo"
+
+# First analysis (builds cache)
+echo "Initial analysis..."
+time kit symbols $REPO_PATH > /dev/null
+
+# Subsequent analyses (use cache - much faster)
+echo "Cached analysis..."
+time kit symbols $REPO_PATH > /dev/null
+
+# Check cache performance
+kit cache stats $REPO_PATH
+```
+
+### Focused Directory Analysis
+
+The new subpath and grep capabilities enable focused analysis of specific parts of large repositories:
+
+```bash
+#!/bin/bash
+REPO_PATH="/path/to/repo"
+FOCUS_DIR="src/api"
+
+# Analyze specific directory structure
+echo "📁 Analyzing directory structure for $FOCUS_DIR"
+kit file-tree $REPO_PATH --path $FOCUS_DIR
+
+# Find TODOs only in API code
+echo "🔍 Finding TODOs in API code"
+kit grep $REPO_PATH "TODO" --include "$FOCUS_DIR/*.py"
+
+# Find security-related code
+echo "🔒 Finding security patterns"
+kit grep $REPO_PATH "auth\|token\|password" --include "$FOCUS_DIR/*" --ignore-case
+
+# Export focused analysis
+kit file-tree $REPO_PATH --path $FOCUS_DIR --output api-structure.json
+kit grep $REPO_PATH "class.*API" --include "$FOCUS_DIR/*.py" --output api-classes.json
+```
+
+### Large Repository Optimization
+
+For large repositories, use subpath analysis to work efficiently:
+
+```bash
+#!/bin/bash
+REPO_PATH="/path/to/large-repo"
+
+# Instead of analyzing the entire repository
+# kit symbols $REPO_PATH  # This could be slow
+
+# Focus on specific components
+for component in "src/auth" "src/api" "src/models"; do
+  echo "Analyzing $component..."
+  
+  # Get component structure
+  kit file-tree $REPO_PATH --path "$component"
+  
+  # Find component-specific patterns
+  kit grep $REPO_PATH "class\|def\|import" --include "$component/*.py" --max-results 100
+  
+  # Extract symbols from component files only
+  # (Note: symbols command doesn't support subpath yet, but you can filter)
+  kit symbols $REPO_PATH --format json | jq ".[] | select(.file | startswith(\"$component\"))"
+done
+```
+
+### Semantic Code Discovery
+
+Use semantic search to understand unfamiliar codebases or find implementation patterns:
+
+```bash
+#!/bin/bash
+REPO_PATH="/path/to/unfamiliar/repo"
+
+# First-time setup (builds vector index)
+echo "🔍 Building semantic index..."
+kit search-semantic $REPO_PATH "test setup" --top-k 1 > /dev/null
+
+echo "🧠 Exploring codebase with semantic search..."
+
+# Understand architecture patterns
+kit search-semantic $REPO_PATH "authentication flow" --top-k 3
+kit search-semantic $REPO_PATH "database connection setup" --top-k 3
+
+# Find implementation examples
+kit search-semantic $REPO_PATH "error handling patterns" --top-k 5
+kit search-semantic $REPO_PATH "retry logic with backoff" --top-k 3
+
+# Discover testing approaches
+kit search-semantic $REPO_PATH "unit test examples" --top-k 5
+kit search-semantic $REPO_PATH "mocking external services" --top-k 3
+
+# Find configuration patterns
+kit search-semantic $REPO_PATH "environment variable configuration" --top-k 3
+kit search-semantic $REPO_PATH "logging setup" --top-k 3
+
+# Export findings for team review
+kit search-semantic $REPO_PATH "API endpoint implementation" --output api-patterns.json
+kit search-semantic $REPO_PATH "data validation logic" --output validation-patterns.json
+```
+
+### AI-Powered Development
+
+```bash
+#!/bin/bash
+# Stage changes
+git add .
+
+# Generate intelligent commit message
+kit commit --dry-run
+
+# If satisfied, commit
+kit commit
+
+# Create PR and get AI summary
+gh pr create --title "Feature: New auth system" --body "Initial implementation"
+PR_URL=$(gh pr view --json url -q .url)
+kit summarize --update-pr-body $PR_URL
+```
+
+### Code Review Preparation
+
+```bash
+#!/bin/bash
+REPO_PATH="/path/to/repo"
+OUTPUT_DIR="./analysis"
+
+mkdir -p $OUTPUT_DIR
+
+# Generate comprehensive analysis (uses caching)
+kit export $REPO_PATH index $OUTPUT_DIR/repo-index.json
+
+# Find all TODO items with grep (faster than search for literal strings)
+kit grep $REPO_PATH "TODO\|FIXME\|XXX" --ignore-case --output $OUTPUT_DIR/todos.json
+
+# Analyze specific areas that changed
+CHANGED_DIRS=$(git diff --name-only HEAD~1 | cut -d'/' -f1 | sort -u)
+for dir in $CHANGED_DIRS; do
+  echo "Analyzing changed directory: $dir"
+  kit file-tree $REPO_PATH --path "$dir" --output "$OUTPUT_DIR/${dir}-structure.json"
+  kit grep $REPO_PATH "test\|spec" --include "$dir/*" --output "$OUTPUT_DIR/${dir}-tests.json"
+done
+```
+
+### Documentation Generation
+
+```bash
+#!/bin/bash
+REPO_PATH="/path/to/repo"
+DOCS_DIR="./docs"
+
+mkdir -p $DOCS_DIR
+
+# Extract all public APIs (uses incremental analysis)
+kit symbols $REPO_PATH --format json | \
+  jq '.[] | select(.type=="function" and (.name | startswith("_") | not))' \
+  > $DOCS_DIR/public-api.json
+
+# Generate symbol usage reports
+for symbol in $(kit symbols $REPO_PATH --format names | head -10); do
+  kit usages $REPO_PATH "$symbol" --output "$DOCS_DIR/usage-$symbol.json"
+done
+```
+
+### Migration Analysis
+
+```bash
+#!/bin/bash
+OLD_REPO="/path/to/old/repo"
+NEW_REPO="/path/to/new/repo"
+
+# Compare symbol counts (both use caching)
+echo "Old repo symbols:"
+kit symbols $OLD_REPO --format names | wc -l
+
+echo "New repo symbols:"  
+kit symbols $NEW_REPO --format names | wc -l
+
+# Find deprecated patterns
+kit search $OLD_REPO "deprecated\|legacy" --pattern "*.py" > deprecated-code.txt
+
+# Export both for detailed comparison
+kit export $OLD_REPO symbols old-symbols.json
+kit export $NEW_REPO symbols new-symbols.json
+```
+
+### CI/CD Integration
+
+```yaml
+# .github/workflows/code-analysis.yml
+name: Code Analysis
+on: [push, pull_request]
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install kit
+        run: uv pip install cased-kit
+        
+      - name: Analyze codebase
+        run: |
+          # Generate repository analysis (uses incremental caching)
+          kit export . index analysis.json
+          
+          # Check for complexity issues
+          COMPLEX_FUNCTIONS=$(kit symbols . --format json | jq '[.[] | select(.type=="function" and (.end_line - .start_line) > 50)] | length')
+          
+          if [ $COMPLEX_FUNCTIONS -gt 10 ]; then
+            echo "Warning: $COMPLEX_FUNCTIONS functions are longer than 50 lines"
+          fi
+          
+          # Find security-related patterns
+          kit search . "password\|secret\|key" --pattern "*.py" > security-review.txt
+          
+          # Show cache performance
+          kit cache stats .
+          
+      - name: Upload analysis
+        uses: actions/upload-artifact@v3
+        with:
+          name: code-analysis
+          path: |
+            analysis.json
+            security-review.txt
+```
+
+## Best Practices
+
+### Performance
+
+- Use incremental analysis (`kit symbols`) for repeated operations - 25-36x faster
+- Use `--format names` for large repositories when you only need symbol names
+- Leverage file patterns (`--pattern`) to limit search scope
+- Monitor cache performance with `kit cache stats`
+
+### Caching
+
+- Use `kit cache cleanup` periodically to remove stale entries
+- Monitor cache size with `kit cache status`
+- Clear cache (`kit cache clear`) if switching between very different git states frequently
+
+### AI Workflows
+
+- Use `--dry-run` to preview AI-generated content before posting
+- Combine `kit commit` with `kit summarize` for complete AI-powered development workflow
+- Use `--plain` output for piping to other AI tools
+
+### Semantic Search
+
+- Use `symbols` chunking for better semantic boundaries (default)
+- Try different embedding models for different use cases: lightweight (`all-MiniLM-L6-v2`) vs. quality (`all-mpnet-base-v2`)
+- Build index once, reuse with `--no-build-index` for faster subsequent searches
+- Use natural language queries that describe what you're looking for conceptually
+- Combine with text search (`kit search`) for comprehensive code discovery
+
+### Scripting
+
+- Always check command exit codes (`$?`) in scripts
+- Use `--output` to save data persistently rather than relying on stdout capture
+- Combine with `jq`, `grep`, `sort`, and other Unix tools for powerful analysis
+
+### Integration
+
+- Export JSON data for integration with external tools and databases
+- Use the CLI in CI/CD pipelines for automated code quality checks
+- Combine with language servers and IDEs for enhanced development workflows

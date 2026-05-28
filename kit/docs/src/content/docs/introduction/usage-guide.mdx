@@ -1,0 +1,263 @@
+---
+title: Usage Guide
+---
+
+This guide provides practical examples of how to use the core `Repository` object in `kit` to interact with your codebase.
+
+## Initializing a `Repository`
+
+First, create an instance of the `Repository` class, pointing it to your code. `kit` can work with local directories or clone remote Git repositories.
+This is the starting point for any analysis, giving `kit` access to the codebase.
+
+### Local Directory
+
+If your code is already on your machine:
+
+```python
+from kit import Repository
+
+repo = Repository("/path/to/your/local/project")
+```
+
+### Remote Git Repository
+
+`kit` can clone a public or private Git repository. For private repos, provide a GitHub token.
+
+```python
+# Public repo
+repo = Repository("https://github.com/owner/repo-name")
+
+# Private repo (requires token)
+# Ensure the token has appropriate permissions
+github_token = "your_github_pat_here"
+repo = Repository("https://github.com/owner/private-repo-name", github_token=github_token)
+```
+
+### Caching
+
+When cloning remote repositories, `kit` caches them locally to speed up subsequent initializations. By default, caches are stored in a temporary directory. You can specify a persistent cache directory:
+
+```python
+repo = Repository(
+    "https://github.com/owner/repo-name", 
+    cache_dir="/path/to/persistent/cache"
+)
+```
+
+## Basic Exploration
+
+Once initialized, you can explore the codebase.
+Use these methods to get a high-level overview of the repository's structure and key code elements, or to gather foundational context for an LLM.
+
+### Getting the File Tree
+
+List all files and directories:
+
+```python
+file_tree = repo.get_file_tree()
+# Returns a list of dicts: [{'path': '...', 'is_dir': False, ...}, ...]
+```
+
+### Extracting Symbols
+
+Identify functions, classes, etc., across the whole repo or in a specific file:
+
+```python
+# All symbols
+all_symbols = repo.extract_symbols()
+
+# Symbols in a specific file
+specific_symbols = repo.extract_symbols("src/my_module.py")
+# Returns a list of dicts: [{'name': '...', 'type': 'function', ...}, ...]
+```
+
+### Performance Tips
+
+Operations scoped to specific files or directories are fast:
+
+```python
+# Fast: single file (~30ms)
+symbols = repo.extract_symbols("src/my_module.py")
+
+# Fast: scoped to directory
+tree = repo.get_file_tree("src/")
+```
+
+Bulk operations that scan the entire repository are slower on large codebases:
+
+```python
+# Slower: parses ALL files (can take seconds on large repos)
+all_symbols = repo.extract_symbols()  # no file argument
+index = repo.build_index()
+usages = repo.find_symbol_usages("MyClass")
+```
+
+For most use cases, scope to specific files or directories rather than scanning everything.
+
+### Searching Text
+
+Perform simple text or regex searches:
+
+```python
+matches = repo.search_text("my_function_call", file_pattern="*.py")
+# Returns a list of dicts: [{'file': '...', 'line_number': 10, ...}, ...]
+```
+
+## Preparing Code for LLMs
+
+`kit` provides utilities to prepare code snippets for large language models.
+These methods help break down large codebases into manageable pieces suitable for LLM context windows or specific analysis tasks.
+
+### Chunking
+
+Split files into manageable chunks, either by line count or by symbol definition:
+
+```python
+# Chunk by lines
+line_chunks = repo.chunk_file_by_lines("src/long_file.py", max_lines=100)
+
+# Chunk by symbols (functions, classes)
+symbol_chunks = repo.chunk_file_by_symbols("src/long_file.py")
+```
+
+### Extracting Context
+
+Get the specific function or class definition surrounding a given line number:
+
+```python
+context = repo.extract_context_around_line("src/my_module.py", line=42)
+# Returns a dict like {'name': 'my_function', 'type': 'function', 'code': 'def my_function(...): ...'}
+```
+
+## Generating Code Summaries (Alpha)
+
+
+`kit` includes an alpha feature for generating natural language summaries (like dynamic docstrings) for code elements (files, functions, classes) using a configured Large Language Model (LLM). This can be useful for:
+
+*   Quickly understanding the purpose of a piece of code.
+*   Providing context to other LLM-powered tools.
+*   Powering semantic search based on generated summaries rather than just raw code.
+
+**Note:** This feature is currently in **alpha**. The API may change, and it requires an LLM (e.g., via OpenAI, Anthropic) to be configured for `kit` to use for summarization.
+
+### Using the `DocstringIndexer`
+
+The `DocstringIndexer` is responsible for managing the summarization process and storing/retrieving these generated "docstrings."
+
+```python
+from kit import Repository
+from kit.docstring_indexer import DocstringIndexer
+from kit.summaries import Summarizer, OpenAIConfig
+from sentence_transformers import SentenceTransformer  # or any embedder of your choice
+
+# 1. Initialize your Repository
+repo = Repository("tests/fixtures/realistic_repo")  # Or your project path
+
+# 2. Configure the LLM-powered summarizer
+# Make sure the relevant API key (e.g., OPENAI_API_KEY) is set in your environment
+summarizer = Summarizer(repo, OpenAIConfig(model="gpt-4o"))
+
+# 3. Provide an embedding function (str -> list[float]) for the vector index
+st_model = SentenceTransformer("all-MiniLM-L6-v2")
+embed_fn = lambda text: st_model.encode(text).tolist()
+
+# 4. Create the DocstringIndexer
+#    You can specify where on disk to persist the vector DB via `persist_dir`.
+indexer = DocstringIndexer(
+    repo,
+    summarizer,
+    embed_fn,
+    persist_dir="kit_docstring_cache",
+)
+
+# 5. Build the index (generates summaries for new/changed files/symbols)
+#    This may take some time depending on repository size and LLM speed.
+indexer.build(force=True)  # `level="symbol"` by default
+
+# 6. Retrieve a summary – use the built-in SummarySearcher
+searcher = indexer.get_searcher()
+hits = searcher.search("utils.greet", top_k=1)  # Search by symbol or natural language
+if hits:
+    print("Summary:", hits[0]["summary"])
+else:
+    print("No summary found (yet).")
+```
+
+This generated summary can then be used for various purposes, including enhancing semantic search or providing contextual information for code generation tasks. Refer to the [Core Concepts: Docstring Indexing](/core-concepts/docstring-indexing) page for more details on configuration and advanced usage.
+
+## Semantic Code Search
+
+Perform vector-based semantic search (requires configuration).
+Go beyond keyword search to find code related by meaning or concept, useful for discovery and understanding.
+
+```python
+# NOTE: Requires prior setup - see Core Concepts > Configuring Semantic Search
+results = repo.search_semantic("find code related to database connections", top_k=3)
+```
+
+## Finding Symbol Usages
+
+Locate all definitions and references of a specific symbol:
+Track down where functions or classes are defined and used throughout the codebase for impact analysis or refactoring.
+
+```python
+usages = repo.find_symbol_usages("MyClass", symbol_type="class")
+# Returns a list of dicts showing definitions and text matches across the repo.
+```
+
+## Exporting Data
+
+`kit` can export the gathered information (file tree, symbols, index, usages) to JSON files for use in other tools or offline analysis.
+Persist the results of your analysis or integrate `kit`'s findings into other development workflows.
+
+```python
+# Export the full index (files + symbols)
+repo.write_index("repo_index.json")
+
+# Export only symbols
+repo.write_symbols("symbols.json")
+
+# Export file tree
+repo.write_file_tree("file_tree.json")
+
+# Export usages of a symbol
+repo.write_symbol_usages("MyClass", "my_class_usages.json", symbol_type="class")
+
+```
+
+## Working with Multiple Repositories
+
+For microservices, monorepos, or multi-project codebases, use `MultiRepo` to analyze multiple repositories together:
+
+```python
+from kit import MultiRepo
+
+# Initialize with multiple repo paths
+repos = MultiRepo([
+    "~/code/frontend",
+    "~/code/backend",
+    "~/code/shared-lib",
+])
+
+# Search across all repos
+results = repos.search("handleAuth")
+
+# Find symbols across repos
+user_models = repos.find_symbol("UserModel", symbol_type="class")
+
+# Audit dependencies (Python, JS, Rust, Go)
+deps = repos.audit_dependencies()
+
+# Get summaries of all repos
+summaries = repos.summarize()
+```
+
+CLI commands are also available:
+
+```bash
+kit multi search ~/frontend ~/backend -q "TODO"
+kit multi deps ~/service-a ~/service-b ~/service-c
+kit multi summary ~/project-*
+```
+
+See the [MultiRepo API reference](/api/multi-repo) for complete documentation and use cases.

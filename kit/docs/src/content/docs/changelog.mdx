@@ -1,0 +1,919 @@
+---
+title: "Changelog"
+description: "Track changes and improvements in Kit releases"
+---
+
+# Changelog
+
+All notable changes to Kit will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [3.5.1] - 2026-01-18
+
+### Bug Fixes
+
+- **Symbol Code Extraction** (#187, #188)
+  - Fixed `get_symbol_code` returning only symbol name instead of full source code
+  - Fixed `end_line` being same as `start_line` for multi-line functions
+  - Root cause: tree-sitter query patterns for TypeScript, JavaScript, and Rust had captures on wrong node
+  - Added regression tests for multi-line symbol extraction
+
+### Documentation
+
+- Improved `extract_symbols` MCP tool description to document `include_code` parameter
+- Clarified that code is excluded by default in MCP for ~90% token savings
+
+---
+
+## [3.5.0] - 2026-01-07
+
+### Features
+
+- **Large Codebase Support** (#182)
+  - New `warm_cache` MCP tool to pre-warm caches for faster operations on 100K+ file repos
+  - File tree pagination with `limit`/`offset` params (default 10K files per page)
+  - Grep timeout increased from 30s to 120s (configurable via `KIT_GREP_TIMEOUT` env var)
+  - Grep early termination using `-m` flag for faster results
+  - Tested on Linux kernel (98K files): 248x speedup on cached file tree
+
+### Performance
+
+- **Tier 1: Algorithmic Hot Paths** (#179)
+  - Dependency analyzer: O(n²) → O(1) incoming connections lookup (52x speedup)
+  - Line reference fixer: O(n) → O(log n) nearest line with binary search (696x speedup)
+  - Validator pre-compiled regex patterns (1.2x speedup)
+
+- **Tier 2: Caching Optimizations** (#180)
+  - Vector search collection reset optimization (2-5x faster index rebuilds)
+  - Context extractor file caching with mtime validation (10-94x faster repeated reads)
+
+- **Tier 3: Diff & Index Optimizations** (#181)
+  - Diff parsing cache: Pass pre-parsed diff to avoid redundant parsing (21.5x speedup)
+  - Parallel file processing in vector index using ThreadPoolExecutor (1.33x speedup)
+
+---
+
+## [3.4.0] - 2026-01-06
+
+### Improvements
+
+- **LLM Client Consolidation & BaseReviewer Extraction** (#178)
+  - Consolidated duplicate LLM client implementations across PR review modules
+  - Extracted common `BaseReviewer` class for shared reviewer logic
+  - Cleaner separation of concerns between different reviewer implementations
+  - Reduced code duplication and improved maintainability
+
+---
+
+## [3.3.0] - 2026-01-05
+
+### Features
+
+- **MCP Context Optimization** (#177)
+  - Reduced `extract_symbols` output by ~90% (22K → 2K tokens) by excluding code by default
+  - Reduced `get_file_tree` output by ~82% (18K → 3K tokens) with compact mode
+  - New `get_symbol_code` tool for lazy loading specific symbol code on-demand
+  - New parameters: `include_code` for extract_symbols, `compact` and `include_dirs` for get_file_tree
+
+---
+
+## [3.2.3] - 2026-01-05
+
+### Features
+
+- **Google Gemini Agentic Review Support** (#173, #174)
+  - Added `_run_agentic_analysis_google()` for multi-turn agentic analysis with Google Gemini
+  - Fixed routing bug where Gemini was incorrectly calling OpenAI API
+  - Added clear error message for Ollama users (agentic mode not yet supported)
+  - Proper provider dispatch: Anthropic, Google, OpenAI, with Ollama error
+
+---
+
+## [3.2.2] - 2026-01-05
+
+### Features
+
+- **OPENAI_BASE_URL Environment Variable Support** (#176)
+  - `OpenAIConfig` now reads `base_url` from `OPENAI_BASE_URL` environment variable
+  - Enables use with internal enterprise proxies, API gateways, and OpenAI-compatible providers
+  - Works automatically with MCP server and all Kit LLM features
+  - Matches convention used by the official OpenAI Python SDK
+
+---
+
+## [3.2.1] - 2026-01-01
+
+### Bug Fixes
+
+- **OpenAI GPT-5 Agentic Review Support** (#171, #172)
+  - Fixed agentic reviewer to use `max_completion_tokens` instead of `max_tokens` for OpenAI GPT-5 models
+  - GPT-5.2 and other GPT-5 variants now work correctly with `kit review --agentic`
+  - Applied the same fix pattern already present in other review modules
+
+---
+
+## [3.2.0] - 2025-12-26
+
+### Bug Fixes
+
+- **Arrow Function Detection in JavaScript/TypeScript** (#168, #169)
+  - Fixed `extract_symbols` MCP tool and API to properly detect arrow functions
+  - JavaScript: Now detects arrow functions with `const`, `let`, and `var` declarations
+  - TypeScript: Now detects non-exported arrow functions (previously only exported ones were found)
+  - TSX: Inherits TypeScript fixes for React component detection
+  - Also added detection for function expressions (`const fn = function() {}`)
+  - Added generator function detection
+
+### Tests
+
+- Added comprehensive test suite for arrow function symbol extraction
+  - 16 new tests covering JavaScript, TypeScript, and TSX arrow functions
+  - Tests for async arrow functions, typed parameters, exports, and React components
+
+---
+
+## [3.1.0] - 2025-12-15
+
+### Major Features
+
+- **MultiRepo: Multi-Repository Analysis** (#164)
+  - New `MultiRepo` class for unified analysis across multiple repositories
+  - Ideal for microservices, frontend/backend splits, and team projects
+  - Unified text search with regex support across all repos
+  - Semantic search with merged, relevance-ranked results
+  - Cross-repo symbol extraction and lookup
+  - Dependency auditing (Python, JS, Rust, Go) across repositories
+  - Repository summaries with language detection
+  - CLI support: `kit multi search`, `kit multi symbols`, `kit multi deps`, `kit multi summary`
+
+- **Rust Dependency Analyzer** (#163)
+  - Full support for analyzing Rust crate dependencies via tree-sitter
+  - Parses `Cargo.toml` for crate metadata and external dependencies
+  - Extracts `use`, `mod`, and `extern crate` statements
+  - Resolves `crate::`, `self::`, `super::` paths to actual modules
+  - Classifies dependencies as internal, external, or std (`std`, `core`, `alloc`, `proc_macro`, `test`)
+  - Dependency graph generation with cycle detection
+  - CLI: `kit dependencies . --language rust`
+
+- **JavaScript/TypeScript Dependency Analyzer** (#159)
+  - Full support for analyzing JS/TS codebases via tree-sitter
+  - ESM imports: `import x from 'pkg'`, `import { x } from 'pkg'`
+  - CommonJS: `require('pkg')`
+  - Dynamic imports: `import('pkg')`
+  - Re-exports: `export { x } from 'pkg'`, `export * from 'pkg'`
+  - Scoped package support (`@org/pkg`)
+  - Node.js built-in module detection (including `node:` protocol)
+  - Index file resolution for directory imports
+  - CLI: `kit dependencies . --language javascript`
+
+### Documentation
+
+- New MultiRepo API reference page with use cases and examples
+- Updated dependency analyzer docs with Rust and JavaScript sections
+- Usage guide updated with MultiRepo quick start
+
+---
+
+## [3.0.0] - 2025-12-07
+
+### Major Features
+
+- **Go Dependency Analyzer** (#157)
+  - Full support for analyzing Go module dependencies via tree-sitter
+  - Parses `import` declarations from `.go` files (excludes `_test.go`)
+  - Detects Go modules via `go.mod` and standard library packages
+  - Distinguishes between internal, external, and stdlib dependencies
+  - Dependency graph generation with cycle detection
+  - Integration with existing `kit dependencies` CLI command
+
+### Performance
+
+- **38x Faster Repository Operations**
+  - Cold start reduced from ~17s to ~0.45s on large codebases
+  - **Rust-based file walking**: New `ignore-python` dependency (PyO3 bindings to BurntSushi's `ignore` crate) replaces Python's `os.walk`
+  - **Git SHA TTL cache**: Eliminates redundant `git rev-parse` calls with 5-second TTL
+  - **String operations**: Replaced `pathlib` operations with string manipulation in hot paths
+
+### Breaking Changes
+
+- **New required dependency**: `ignore-python>=0.3.0` is now required for file walking
+- **Gitignore behavior**: The Rust walker requires a `.git` directory to respect `.gitignore` rules. Repositories without `.git` will not filter ignored files.
+- **CLI error handling**: Invalid repository paths now return exit code 1 with an error message instead of silently failing
+
+### Tests
+
+- Comprehensive Go dependency analyzer test suite (19 tests)
+  - Multiple files per package, nested packages, vendor directories
+  - Standard library detection including subpackages (`net/http`, `encoding/json`)
+  - Cycle detection and graph structure validation
+
+---
+
+## [2.2.1] - 2025-12-05
+
+### Bug Fixes
+
+- **GPT-5 Model Compatibility** (#154)
+  - Fixed OpenAI API 400 error when using GPT-5 models for PR reviews
+  - GPT-5 models require `max_completion_tokens` instead of the deprecated `max_tokens` parameter
+  - Updated all OpenAI API calls in PR review module (reviewer, summarizer, commit generator, local reviewer, matrix tester)
+  - Added comprehensive test coverage for GPT-5 parameter handling
+
+---
+
+## [2.2.0] - 2025-11-23
+
+### New Features
+
+- **Updated Claude Model Support**
+  - Added Claude Sonnet 4.5 (`claude-sonnet-4-5`) as the new default model
+  - Added Claude Haiku 4.5 (`claude-haiku-4-5`) for ultra-fast, economical reviews
+  - Pricing: Sonnet 4.5 at $3/$15 per million tokens, Haiku 4.5 at $1/$5 per million tokens
+
+- **Expanded Model Support**
+  - Added GPT-5.1 model: `gpt-5.1` with adaptive reasoning
+  - Added Gemini 3 Pro (`gemini-3-pro`) and Gemini 2.5 Flash-Lite (`gemini-2.5-flash-lite`)
+  - Added Grok (X.AI) support with latest models:
+    - `grok-4-1-fast-reasoning` - Optimized for tool calling and agentic workflows
+    - `grok-4-1-fast-non-reasoning` - Optimized for speed and simple queries
+    - `grok-code-fast-1` - Speedy reasoning model for agentic coding
+    - Plus standard models: `grok-4`, `grok-3`, `grok-3-mini`
+  - All Grok models accessible via OpenAI provider with `api_base_url: https://api.x.ai/v1`
+
+### Improvements
+
+- **Windows UTF-8 Encoding Fix** (#151, #153)
+  - Fixed Windows cp950 decoding errors when using repositories with non-ASCII file paths
+  - All subprocess calls now explicitly use UTF-8 encoding instead of system default
+  - Resolves issues for users on Traditional Chinese, Japanese, Korean, and other non-ASCII Windows systems
+  - Added comprehensive UTF-8 test coverage for Chinese, Japanese, Korean, emoji, and other Unicode characters
+
+- **Ripgrep Integration for Code Search** (#150)
+  - `CodeSearcher.search_text()` now automatically uses ripgrep when available for 10x faster searches
+  - Automatic fallback to Python implementation ensures compatibility
+  - 88% time reduction on typical searches (50-100ms vs 400-500ms)
+  - Full support for all SearchOptions (case sensitivity, context lines, gitignore)
+  - Security protections: 100-line context cap, 30-second timeout, no shell injection
+  - Added comprehensive benchmark suite comparing ripgrep vs Python performance
+
+- **Default Model Updated**: Changed default Anthropic model from `claude-sonnet-4-20250514` to `claude-sonnet-4-5`
+- **Documentation Updates**: Updated all model examples and configuration templates across PR review docs, CLI docs, and CI/CD guides
+- **Code Summarization**: Updated documentation to include OpenRouter and Grok examples, refreshed model names
+- **Model Detection**: Enhanced `grok-` pattern recognition for automatic provider detection
+- **New LLM Configuration Page**: Added comprehensive guide covering all providers, when LLMs are used, and configuration examples
+- **Removed context-assembly page**: Consolidated LLM configuration into new dedicated page
+
+---
+
+## [2.1.3] - 2025-10-13
+
+### New Features
+
+- **Zig Language Support** (#145)
+  - Added comprehensive Zig symbol extraction with tree-sitter
+  - Support for functions, structs, enums, constants, and type aliases
+  - Full integration with existing symbol extraction pipeline
+
+### Improvements
+
+- **Vector Search Enhancements** (#143)
+  - Improved batch size handling for vector search operations
+  - Better performance for large-scale semantic search queries
+
+### Documentation
+
+- Fixed broken table formatting in search approaches documentation
+- Updated quickstart guide for better clarity
+- README improvements and updates
+
+---
+
+## [2.0.0] - 2025-09-15
+
+### Major Release
+
+- **kit-dev mcp Server**
+  - New enhanced MCP (Model Context Protocol) server for AI assistants
+  - Smart context building for development tasks
+  - Real-time file watching and change detection
+  - Documentation research for any package
+  - Integration with Cursor, Windsurf, Claude Code, and VS Code
+  - New documentation site at https://kit-mcp.cased.com
+
+- **Three-Part Architecture**
+  - Core Toolkit: Foundation library for building AI developer tools
+  - kit-dev mcp: Enhanced MCP server for AI assistants
+  - AI PR Reviewer: Production-ready code review system
+
+### Breaking Changes
+
+- MCP server command changed from `kit-mcp` to `kit-dev-mcp`
+- Restructured MCP server implementation for enhanced capabilities
+- Removed temperature parameters from all LLM configurations for improved model compatibility
+  - Affects OpenAI, Anthropic, Google, and Ollama configurations
+  - Models now use their default temperature settings
+  - Improves compatibility with newer model versions that don't support custom temperature
+
+### Documentation
+
+- New dedicated MCP documentation site at https://kit-mcp.cased.com
+- Updated README with three-part architecture explanation
+- Enhanced examples and integration guides
+
+---
+
+## [1.9.2] - 2025-01-14
+
+### Bug Fixes
+
+- **Tree-sitter API Compatibility**: Fixed AttributeError with `Query.captures` method across different tree-sitter versions
+  - Added robust fallback mechanism between `matches()` and `captures()` APIs
+  - Improved error handling for various tree-sitter API surfaces
+  - Ensures compatibility with tree-sitter >= 0.23.2
+
+- **Test Isolation**: Fixed cache isolation issue in `test_helicone_api_integration`
+  - Added proper LRU cache clearing for test isolation
+  - Prevents test failures due to cached pricing data
+
+### New Features
+
+- **Extended OpenAI Model Support**
+  - Added support for GPT-5 models: `gpt-5`, `gpt-5-mini`, `gpt-5-nano`
+  - Added support for O3 series models: `o3`, `o3-mini`, `o3-medium`
+  - Enhanced model detection patterns for future OpenAI model families
+
+### Testing
+
+- **Comprehensive Tree-sitter Compatibility Tests**
+  - Added test suite covering different tree-sitter API versions
+  - Tests for both `matches()` and `captures()` API methods
+  - Edge case handling for missing or non-functional APIs
+
+---
+
+## [1.9.1] - 2025-08-26
+
+### Bug Fixes
+
+- Fixed version number inconsistencies
+
+---
+
+## [1.9.0] - 2025-08-19
+
+### Major Features
+
+- **Chroma Cloud Integration**
+  - Added support for [Chroma Cloud](https://trychroma.com), a fully managed vector database service
+  - New `ChromaCloudBackend` class enables cloud-based vector storage for semantic search
+  - Same API as local ChromaDB - only difference is connecting to Cloud server instead of local
+  - Seamless switching between local and cloud storage via `KIT_USE_CHROMA_CLOUD` environment variable
+  - Supports team collaboration with shared indexes across machines
+  - No local storage limits - scale to massive codebases
+
+### New Features
+
+- **Smart Backend Selection**
+  - Automatic backend selection based on environment configuration
+  - Explicit opt-in for cloud mode (won't accidentally use cloud just because API key exists)
+  - `get_default_backend()` factory function for easy backend creation
+
+### Configuration
+
+- **Environment Variables for Chroma Cloud**
+  - `KIT_USE_CHROMA_CLOUD`: Enable/disable cloud mode (default: false)
+  - `CHROMA_API_KEY`: Your Chroma Cloud API key (required for cloud mode)
+  - `CHROMA_TENANT`: Your tenant UUID from Chroma Cloud dashboard (required for cloud mode)
+  - `CHROMA_DATABASE`: Database name from your dashboard (required for cloud mode)
+
+### Improvements
+
+- **Vector Search Enhancements**
+  - Cloud backend preserves data across sessions (no automatic clearing)
+  - Incremental indexing support - add to existing indexes without rebuilding
+  - Better error messages for missing credentials or configuration
+
+### Dependencies
+
+- **ChromaDB**: Upgraded minimum version to 1.0.0 (from 0.5.23) for cloud support
+
+### Scripts
+
+- **New Indexing Script**: `scripts/index_to_chroma.py` for easy repository indexing
+  - Supports `--rebuild` flag to clear and rebuild from scratch
+  - Automatic detection of sentence-transformers for better embeddings
+
+### Documentation
+
+- **Chroma Cloud Setup Guide**: Complete documentation at `docs/chroma-cloud-setup.md`
+  - Step-by-step setup instructions
+  - Migration guide between local and cloud storage
+  - Troubleshooting tips
+
+---
+
+## [1.8.0] - 2025-07-26
+
+### Major Features
+
+- **Enhanced Local Diff Reviews**
+  - Clear documentation on output modes and piping workflows
+  - Default behavior now properly documented: outputs to stdout with formatting
+  - `--plain` mode for clean piping to other tools (e.g., `kit review --plain HEAD~1 | claude`)
+  - Reviews are NOT saved by default (requires `save_reviews: true` in config)
+
+### New Features
+
+- **Comprehensive CLI Test Suite**
+  - Added 72 new tests covering CLI argument parsing and validation
+  - Security-focused validation tests for local diff patterns
+  - Edge case handling for special characters and malicious inputs
+  - CI-friendly test assertions that handle different terminal environments
+
+### Bug Fixes
+
+- **CI Test Failures**: Fixed 9 failing tests related to help output formatting in CI environments
+  - Made help text assertions more robust to handle truncated or ANSI-formatted output
+  - Tests now verify functionality rather than exact help text matches
+
+### Documentation
+
+- **PR Reviewer Docs**: Updated local diff documentation to clarify:
+  - Default output behavior (stdout with formatting)
+  - Output modes (standard vs plain)
+  - File saving is opt-in, not default
+  - Better examples showing piping workflows
+
+---
+
+## [1.7.3] - 2025-07-26
+
+### New Features
+
+- **Local Diff Review Support with MCP** (#118)
+  - Added ability to review local diffs through the MCP server
+  - Enables PR-style reviews for uncommitted changes in development environments
+  - Integrates seamlessly with Claude Desktop and other MCP clients
+
+### Bug Fixes
+
+- **MCP Server Tests**: Fixed test failures in MCP server test suite (#121)
+- **Local Review Tests**: Resolved issues with local review functionality tests (#121)
+
+---
+
+## [1.7.2] - 2025-07-25
+
+### Bug Fixes
+
+- **Symbol Extractor**: Improved defensive query checking to prevent crashes with invalid tree-sitter queries (#119)
+  - Enhanced tree-sitter compatibility handling
+  - More robust error handling for malformed queries
+
+### Improvements
+
+- **Documentation**: Added reviewer link in README for better visibility
+- **Dependencies**: Updated TypeScript dependencies
+
+---
+
+## [1.7.1] - 2025-07-17
+
+### New Features
+
+- **Dynamic Model Pricing via Helicone API**
+  - Replaced hard-coded model pricing with real-time data from Helicone's API (300+ models)
+  - Automatic hourly updates ensure pricing is always current
+  - Graceful fallback to minimal defaults if API is unavailable
+  - Zero configuration needed - pricing updates automatically
+
+### Bug Fixes
+
+- **CI Workflow**: Fixed GitHub Actions parsing issue where setup-uv was incorrectly reading dependencies
+- **Test Suite**: Updated model validation tests to work with dynamic pricing API
+
+---
+
+## [1.7.0] - 2025-07-16
+
+### Major Features
+
+- **TypeScript / Node.js Client**
+  - New published package `@runcased/kit` provides a type-safe wrapper around the Kit CLI for JS/TS projects.
+  - Repository helper, semantic search, PR review and every CLI command exposed via the same API shape.
+  - Added build, lint, type-check and Prettier integration; full Jest test-suite + integration test.
+
+### Tooling & CI
+
+- Unified `scripts/format.sh` now formats *both* Python (Ruff) **and** TypeScript (Prettier, ESLint, `tsc`).
+- GitHub Actions workflow upgraded:
+  - Node setup, JS deps install, shared formatter, and TS test jobs.
+  - Release script publishes Python package to PyPI **and** TS client to npm in one shot (`scripts/release.sh`).
+
+---
+
+## [1.6.0] - 2025-07-02
+
+### Improvements
+
+- **Documentation Overhaul**
+  - Added advanced dependency-analysis tutorial, PR reviewer CI guides, and detailed changelog pages.
+  - Improved quick-start sections and clarified token/env-var usage.
+- **Quality & Testing**
+  - Large expansion of unit/integration test suite (‐80 → 120 tests).
+  - Better line-number validation tests for PR reviewer and diff parser.
+
+---
+
+## [1.5.0] - 2025-07-01
+
+### New Features
+
+- **Semantic Search CLI**
+  - `kit search-semantic` command delivers vector-based natural-language code search.
+  - Supports on-the-fly or persisted embedding indexes, chunking by symbols or lines, configurable models.
+  - Python API surface `Repository.search_semantic()` added.
+
+### Enhancements
+
+- Faster vector-index build via batched embedding calls.
+- Early incremental support helpers for Chroma backend.
+
+---
+
+## [1.4.0] - 2025-06-27
+
+### New Features
+
+- **Dependency Analysis CLI Command**: Complete command-line interface for code dependency analysis
+  - New `kit dependencies` command supporting Python and Terraform projects
+  - Dependency graph generation with multiple output formats (JSON, DOT, GraphML, adjacency)
+  - Circular dependency detection with detailed cycle visualization
+  - Module-specific analysis with direct and indirect dependency tracking
+  - LLM-friendly context generation for AI-powered dependency analysis
+  - Graphviz integration for dependency visualization (PNG, SVG, PDF output)
+
+
+## [1.3.3] - 2025-06-26
+
+### Security / Bug Fixes
+
+- **Private-repo cloning with installation tokens**: `Repository` now uses an improved `GIT_ASKPASS` helper that supplies `x-access-token` as the username and the token as the password.  
+  - Fixes 404 "repository not found" errors when using GitHub App installation tokens.  
+  - Backwards-compatible: personal-access tokens (PATs) continue to work unchanged.
+
+## [1.3.2] - 2025-06-25
+
+### Improvements
+
+- **More actionable API errors**: REST endpoints now return precise HTTP status codes and JSON bodies.  
+  - `/repository` returns `404 {"detail": "Repository not found: <url>"}` instead of a generic 500.  
+  - Dependency and search endpoints propagate upstream errors for easier debugging.
+- **Verbose logging**: Repository creation and search endpoints log request URLs, headers, and truncated bodies for better traceability.
+
+## [1.3.1] - 2025-06-24
+
+### Improvements
+- **Better grep**
+  - Sensible ignore directories
+  - More grep options
+
+## [1.3.0]
+
+### New Features
+
+- **Grep Command**: Fast literal text search across repository files
+  - New `kit grep` command with system grep integration
+  - Case-sensitive and case-insensitive search options
+  - File inclusion/exclusion patterns with glob support
+  - Configurable result limits and automatic .git directory exclusion
+  - 30-second timeout protection for large repositories
+
+- **File Tree Subpath Support**: Analyze specific directories within repositories
+  - New `--path` option for `kit file-tree` command enables directory-specific analysis
+  - Supports relative paths from repository root (e.g., `--path src/components`)
+  - Compatible with existing output formats and export functionality
+  - Enables focused analysis of large repository subdirectories
+
+### Improvements
+
+- **Path Validation**: Centralized path checking across all file operations
+  - Unified validation utility prevents path traversal in user-provided file paths
+  - Maintains compatibility with existing symlink handling on macOS
+
+## [1.2.3]
+
+### Bug Fixes
+
+- **Duplicate TypeScript / TSX Symbols**: Resolved an issue where some symbols could be recorded twice in `symbols.json` depending on tree-sitter queries
+  - The `TreeSitterSymbolExtractor` now removes duplicate symbols based on `(name, type, start_line, end_line)`
+  - Added dedicated regression test suite covering TypeScript and TSX symbol deduplication
+
+### Improvements
+
+- **Optional Dependencies**: Made `tiktoken` dependency optional in `summaries.py` to reduce installation requirements
+- **Dependency Management**: Relaxed FastAPI version constraints for better compatibility
+- **Development Dependencies**: Moved linters and type checking dependencies to development group
+
+## [1.2.2]
+
+### Enhanced Features
+
+- **C++ Language Support**: Added comprehensive C++ symbol extraction with tree-sitter
+  - Support for classes, functions, structs, enums, namespaces, and templates
+  - Dedicated tree-sitter query patterns for C++ language constructs
+  - Full integration with existing symbol extraction pipeline
+
+- **Kotlin Language Support**: Initial Kotlin language integration with tree-sitter
+  - Classes, functions, objects, interfaces, and enum support
+  - Kotlin-specific language patterns and symbol detection
+  - Comprehensive test coverage for Kotlin symbol extraction
+
+## [1.2.0]
+
+### Enhanced Repository Cache Management
+
+- **Automatic Cache Cleanup**: Repository now accepts optional `cache_ttl_hours` argument for automatic cleanup
+  - Environment variable support via `KIT_TMP_REPO_TTL_HOURS`
+  - Automatically deletes cached repository clones older than TTL
+  - One-shot purge per Python process using `functools.lru_cache`
+  - Fallback to previous behavior when TTL is unset
+
+### Improvements
+
+- **Enhanced Logging**: Debug logging for invalid TTL values and cleanup warnings
+- **Cache Management**: Improved error handling for cache cleanup operations
+- **Documentation**: Updated API documentation and README with cache management details
+
+### Tests
+
+- Added comprehensive test coverage in `tests/test_cache_cleanup.py`
+- TTL parsing validation and error handling tests
+- Cache cleanup logic verification
+
+## [1.1.0]
+
+### Major Features
+
+- **Incremental Analysis System**: High-performance caching for symbol extraction
+  - 25x performance improvements for warm cache scenarios
+  - Multi-strategy cache invalidation (mtime, size, content hash, git state detection)
+  - Automatic cache invalidation on git operations (checkout, commit, merge, rebase)
+  - LRU eviction with configurable cache size limits
+  - New CLI commands: `kit cache status`, `kit cache clear`, `kit cache cleanup`, `kit cache stats`
+
+### Enhanced Features
+
+- **Dart Language Support**: Initial anguage integration with tree-sitter
+  - Classes, functions, constructors, getters, setters, enums, extensions, mixins
+  - Flutter widget detection patterns for StatelessWidget and StatefulWidget
+  - Comprehensive symbol extraction with inheritance relationships
+  - Plugin system support for custom Dart patterns
+
+### Bug Fixes
+
+- **Cache Invalidation Fix**: Resolved stale data issues causing incorrect line numbers
+  - Repository objects now properly detect git state changes (branch switches, commits, merges)
+  - Automatic cache invalidation prevents serving outdated symbol data from previous git states
+  - Comprehensive git SHA tracking ensures data consistency across git operations
+
+- **TSX Language Support**: Fixed missing TypeScript JSX support
+  - Proper fallback to TypeScript queries when tsx directory doesn't exist
+  - Ensures consistent symbol extraction for React TypeScript projects
+
+## [1.0.3]
+
+### New Features
+
+- **Batch File Retrieval**: `Repository.get_file_content` now accepts a list of paths and returns a mapping of `path → content`, eliminating the need for multiple calls when bulk loading files.
+  - Backwards-compatible: single-path calls still return a plain string.
+
+## [1.0.2]
+
+### Improvements
+
+- **Automatic GitHub Token Pickup**: Repository class and MCP server now automatically detect GitHub tokens from environment variables
+  - Checks `KIT_GITHUB_TOKEN` first, then falls back to `GITHUB_TOKEN`
+  - Simplifies private repository access - no need to pass tokens explicitly
+  - Consistent behavior across Python API and MCP server interfaces
+  - Explicit token parameters still override environment variables
+
+- **macOS Symlink Compatibility**: Fixed path validation issues on macOS for MCP server
+  - Resolves `/tmp` → `/private/tmp` symlink conflicts that caused path validation errors
+  - Maintains security while ensuring compatibility with macOS filesystem structure
+  - Fixes "not in subpath" errors when using Claude Desktop and other MCP clients
+
+
+## [1.0.0]
+
+### Major Release
+
+Kit 1.0.0 represents the first stable release of the code intelligence toolkit, marking a significant milestone in providing production-ready code analysis capabilities.
+
+### Major Features
+
+- **Production-Ready Core**: Stable API for code intelligence operations
+  - Comprehensive symbol extraction across multiple programming languages
+  - Advanced code search with regex and semantic capabilities
+  - Repository analysis with git metadata integration
+  - Cross-platform compatibility (Windows, macOS, Linux)
+
+- **Multi-Access Architecture**: Four distinct ways to interact with Kit
+  - **Python API**: Direct integration for applications and scripts
+  - **Command Line Interface**: 15+ commands for shell scripting and automation
+  - **REST API**: HTTP endpoints for web applications and microservices
+  - **MCP Server**: Model Context Protocol integration for AI agents and development tools
+
+- **AI-Powered PR Intelligence**: Complete PR review and analysis system
+  - Smart PR reviews with configurable depth (quick, standard, thorough)
+  - Cost-effective PR summaries for rapid triage
+  - Intelligent commit message generation from staged changes
+  - Support for multiple LLM providers (OpenAI, Anthropic, Google, Ollama)
+  - Repository-aware analysis with symbol and dependency context
+
+- **Advanced Code Understanding**: Deep codebase intelligence capabilities
+  - Multi-language symbol extraction (Python, JavaScript, TypeScript, Go, etc.)
+  - Dependency analysis for Python and Terraform projects
+  - Semantic search with vector embeddings
+  - Context-aware code chunking for LLM consumption
+
+### Enhanced Features
+
+- **Repository Versioning**: Analyze code at specific commits, tags, or branches
+- **Caching System**: Intelligent repository caching for improved performance
+- **Security**: Path traversal protection and input validation
+- **Cost Tracking**: Real-time LLM usage monitoring and pricing transparency
+- **Custom Profiles**: Organization-specific coding standards and review guidelines
+
+### Architecture Highlights
+
+- **Extensible Design**: Plugin architecture for adding new languages and analyzers
+- **Memory Efficient**: Streaming operations for large codebases
+- **Git Integration**: Native git operations with branch and commit support
+- **Type Safety**: Comprehensive type annotations and validation
+
+### Supported Languages
+
+- **Primary**: Python, JavaScript, TypeScript, Go
+- **Additional**: Java, C/C++, Rust, Ruby, PHP, and more via tree-sitter
+- **Configuration**: JSON, YAML, TOML, Dockerfile
+- **Infrastructure**: Terraform, Kubernetes YAML
+
+### LLM Provider Support
+
+- **Cloud Providers**: OpenAI GPT models, Anthropic Claude, Google Gemini
+- **Alternative Providers**: OpenRouter, Together AI, Groq, Fireworks
+- **Local Providers**: Ollama with free local models (DeepSeek R1, Qwen2.5-coder, CodeLlama)
+- **Cost Optimization**: Hybrid workflows combining free local and premium cloud analysis
+
+### Developer Experience
+
+- **Comprehensive Documentation**: Full API reference and usage guides
+- **Example Applications**: Real-world usage patterns and integrations
+- **Community Support**: GitHub discussions and issues
+- **Testing**: Extensive test suite with CI/CD integration
+
+## [0.7.0]
+
+### Major Features
+
+- **Custom Context Profiles**: Store and apply organization-specific coding standards and guidelines
+  - Create reusable profiles: `kit review-profile create --name company-standards`
+  - Apply to any PR: `kit review --profile company-standards <pr-url>`
+  - Export/import for team collaboration
+
+- **Priority Filtering**: Focus reviews on what matters most
+  - Filter by priority levels: `kit review --priority=high,medium <pr-url>`
+  - Reduce noise and costs by focusing on critical issues
+  - Combine with other modes for targeted workflows
+
+## [0.6.4]
+
+### Major Features
+
+- **OpenRouter & LiteLLM Provider Support**: Complete integration with OpenAI-compatible providers
+  - Access to 100+ models through OpenRouter at competitive prices
+  - Support for Together AI, Groq, Perplexity, Replicate, and other popular providers
+  - Additional cost tracking with accurate model name handling
+  - Thanks to @AlanVerbner for this contribution
+
+- **Google Gemini Support for PR Reviews**: Complete integration of Google's Gemini models
+  - Support for latest models: `gemini-2.5-flash`, `gemini-2.5-pro`, `gemini-1.5-flash-8b`
+  - Ultra-budget option with Gemini 1.5 Flash 8B at ~$0.003 per large PR
+  - Automatic provider detection and accurate token-based cost tracking for Gemini
+
+### Bug Fixes
+
+- **Better fork PR Support**: Fixed issue preventing reviews of PRs from certain outside forks
+  - Now uses base repository coordinates instead of head repository for diff fetching
+  - Resolves 404 errors when reviewing external contributor PRs
+  - Thanks to @redvelvets for this contribution
+
+### Enhanced Features
+
+- **Expanded Provider Ecosystem**: Three major categories now supported
+  - **Cloud Providers**: Anthropic Claude, OpenAI GPT, Google Gemini
+  - **Alternative Providers**: OpenRouter, Together AI, Groq, Fireworks
+  - **Local Providers**: Ollama with free local models
+
+- **Smart Model Detection**: Intelligent routing based on model names
+  - Handles complex model naming like `openrouter/anthropic/claude-3.5-sonnet`
+  - Automatically strips provider prefixes for accurate cost calculation
+  - Maintains compatibility with all existing configurations
+
+
+## [0.6.3]
+
+### Bug Fixes
+
+- **Symbol Type Extraction Fix**: Fixed bug where some symbol types were incorrectly processed
+  - Classes and other symbol types no longer have characters incorrectly stripped
+  - Added comprehensive test coverage for symbol type processing edge cases
+
+## [0.6.2]
+
+### Major Features
+
+- **Ollama Support**: Complete local LLM inference support with Ollama
+  - Zero-cost PR reviews with local models
+  - Support for popular models like DeepSeek R1, Qwen2.5-coder, CodeLlama
+  - Automatic provider detection from model names (e.g., `deepseek-r1:latest`)
+  - First-class integration with kit's repository intelligence
+
+- **DeepSeek R1 Reasoning Model Support**
+  - **Thinking Token Stripping**: Automatically removes `<think>...</think>` tags from reasoning models
+  - Clean, professional output without internal reasoning clutter
+  - Preserves the analytical capabilities while improving output quality
+  - Works in both summarization and PR review workflows
+
+- **Plain Output Mode**: New `--plain` / `-p` flag for pipe-friendly output
+  - Removes all formatting and status messages
+  - Perfect for piping to Claude Code or other AI tools
+  - Enables powerful multi-stage AI workflows (e.g., `kit review -p | claude`)
+  - Quiet mode suppresses all progress/status output
+
+### Enhanced Features
+
+- **CLI Improvements**
+  - Added `--version` flag to display current kit version
+  - Model override support: `--model` / `-m` flag for per-review model selection
+  - Better error messages and help text
+
+- **Documentation**
+  - Comprehensive Ollama integration guides
+  - Claude Code workflow examples
+  - Multi-stage AI analysis patterns
+  - Updated CLI reference with new flags
+
+### Developer Experience
+
+- **Community**
+  - Improved README with better getting started instructions
+
+- **Testing**
+  - Comprehensive test suite for thinking token stripping
+  - Ollama integration tests with mock scenarios
+  - PR reviewer test coverage for new features
+
+### Cost Optimization
+
+- **Free Local Analysis**: Use Ollama for zero-cost code analysis
+- **Hybrid Workflows**: Combine free local analysis with premium cloud implementation
+- **Provider Switching**: Automatic provider detection and switching
+
+## [0.6.1]
+
+### Improvements
+
+- Enhanced line number accuracy in PR reviews
+- Improved debug output for troubleshooting
+- Better test coverage for core functionality
+- Performance optimizations for large repositories
+
+### Bug Fixes
+
+- Fixed edge cases in symbol extraction
+- Improved error handling for malformed diffs
+- Better validation for GitHub URLs
+
+## [0.6.0]
+
+### Major Features
+
+- Advanced PR reviews
+- Enhanced line number context and accuracy fore reviews
+- Comprehensive cost tracking and pricing updates for reviews
+- Improved repository intelligence with better symbol analysis
+
+### Enhanced Features
+
+- Better diff parsing and analysis
+- Enhanced file prioritization algorithms for reviews
+- Improved cost breakdown reporting
+
+## Links
+
+- [GitHub Releases](https://github.com/cased/kit/releases)
+- [Issues](https://github.com/cased/kit/issues)

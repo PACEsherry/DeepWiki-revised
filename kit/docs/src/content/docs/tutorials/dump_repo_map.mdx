@@ -1,0 +1,136 @@
+---
+title: Dump Repo Map
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+This tutorial explains how to use `kit` to dump a complete map of your repository—including the file tree and all extracted symbols—as a JSON file. This is useful for further analysis, visualization, or integration with other tools. `kit` provides a convenient method on the `Repository` object to achieve this directly.
+
+## Step 1: Create the Script
+
+Create a Python script named `dump_repo_map.py` with the following content. This script uses `argparse` to accept the repository path and the desired output file path.
+
+```python
+# dump_repo_map.py
+from kit import Repository # Import the main Repository class
+import argparse
+import sys
+import os
+
+def main():
+    parser = argparse.ArgumentParser(description="Dump a repository's file tree and symbols as JSON using kit.")
+    parser.add_argument("repo_path", help="Path to the repository directory.")
+    parser.add_argument("output_file", help="Path to the output JSON file.")
+    args = parser.parse_args()
+
+    repo_path = args.repo_path
+    if not os.path.isdir(repo_path):
+        print(f"Error: Repository path not found or not a directory: {repo_path}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        print(f"Initializing repository at: {repo_path}", file=sys.stderr)
+        repo = Repository(repo_path)
+        
+        print(f"Dumping repository index to: {args.output_file}", file=sys.stderr)
+        repo.write_index(args.output_file) # Use the direct method
+        
+        print(f"Successfully wrote repository map to {args.output_file}", file=sys.stderr)
+    except Exception as e:
+        print(f"Error processing repository: {e}", file=sys.stderr)
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
+```
+
+---
+
+## Step 2: Run the Script
+
+Save the code above as `dump_repo_map.py`. You can then run it from your terminal, providing the path to the repository you want to map and the desired output file name:
+
+```sh
+python dump_repo_map.py /path/to/repo repo_map.json
+```
+
+This will create a JSON file (e.g., `repo_map.json`) containing the structure and symbols of your codebase.
+
+---
+
+## Example JSON Output
+
+The output JSON file will contain a `file_tree` (also aliased as `files`) and a `symbols` map.
+
+```json
+{
+  "file_tree": [
+    {
+      "path": "src",
+      "is_dir": true,
+      "name": "src",
+      "size": 0
+    },
+    {
+      "path": "src/main.py",
+      "is_dir": false,
+      "name": "main.py",
+      "size": 1024
+    },
+    {
+      "path": "README.md",
+      "is_dir": false,
+      "name": "README.md",
+      "size": 2048
+    }
+    // ... more files and directories
+  ],
+  "files": [
+    // ... same content as file_tree ...
+  ],
+  "symbols": {
+    "src/main.py": [
+      {
+        "type": "function", 
+        "name": "main", 
+        "start_line": 10, 
+        "end_line": 25, 
+        "code": "def main():\n  pass"
+      },
+      {
+        "type": "class", 
+        "name": "App", 
+        "start_line": 30, 
+        "end_line": 55
+      }
+    ],
+    "src/utils.py": [
+      {
+        "type": "function", 
+        "name": "helper", 
+        "start_line": 5, 
+        "end_line": 12
+      }
+    ]
+    // ... more files and their symbols
+  }
+}
+```
+
+<Aside type="note">
+  The exact content and structure of symbol information (e.g., inclusion of `code` snippets) depends on the `RepoMapper`'s symbol extraction capabilities for the specific languages in your repository.
+</Aside>
+
+---
+
+## Integration Ideas
+
+- Use the JSON output to feed custom dashboards or documentation tools.
+- Integrate with code search or visualization tools.
+- Use for code audits, onboarding, or automated reporting.
+
+---
+
+## Conclusion
+
+With `kit`, you can easily export a structured map of your repository using `repo.write_index()`, making this data readily available for various downstream use cases and custom tooling.

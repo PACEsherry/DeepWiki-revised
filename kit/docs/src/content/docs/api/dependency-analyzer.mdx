@@ -1,0 +1,566 @@
+---
+title: DependencyAnalyzer API
+description: API documentation for the DependencyAnalyzer class and its language-specific implementations.
+---
+
+The `DependencyAnalyzer` class and its derivatives provide tools for analyzing dependencies between components in a codebase. These analyzers help you understand module relationships, detect circular dependencies, export dependency graphs, and generate visualization and LLM-friendly context about codebase architecture.
+
+## Base Class
+
+**Class: `DependencyAnalyzer`**  
+*(defined in `kit/dependency_analyzer/dependency_analyzer.py`)*
+
+`DependencyAnalyzer` is an abstract base class that defines the common interface for all language-specific dependency analyzers. You typically don't instantiate this class directly; instead, use the factory method `Repository.get_dependency_analyzer(language)` to get the appropriate analyzer for your target language.
+
+```python
+from kit import Repository
+
+repo = Repository("/path/to/your/codebase")
+analyzer = repo.get_dependency_analyzer('python')  # or 'terraform'
+```
+
+### Constructor
+
+```python
+DependencyAnalyzer(repository: Repository)
+```
+
+**Parameters:**
+
+* **`repository`** (`Repository`, required):  
+  A Kit `Repository` instance that provides access to the codebase.
+
+### Methods
+
+#### `build_dependency_graph`
+
+**Method: `DependencyAnalyzer.build_dependency_graph`**  
+*(defined in `kit/dependency_analyzer/dependency_analyzer.py`)*
+
+Analyzes the entire repository and builds a dependency graph.
+
+```python
+graph = analyzer.build_dependency_graph()
+```
+
+**Returns:**
+
+* A dictionary representing the dependency graph where:
+  * Keys are component identifiers (e.g., module names for Python, resource IDs for Terraform)
+  * Values are dictionaries containing component metadata and dependencies
+
+#### `export_dependency_graph`
+
+**Method: `DependencyAnalyzer.export_dependency_graph`**  
+*(defined in `kit/dependency_analyzer/dependency_analyzer.py`)*
+
+Exports the dependency graph to various formats.
+
+```python
+# Export to JSON file
+result = analyzer.export_dependency_graph(
+    output_format="json", 
+    output_path="dependencies.json"
+)
+
+# Export to DOT file (for Graphviz)
+result = analyzer.export_dependency_graph(
+    output_format="dot", 
+    output_path="dependencies.dot"
+)
+
+# Export to GraphML file (for tools like Gephi or yEd)
+result = analyzer.export_dependency_graph(
+    output_format="graphml", 
+    output_path="dependencies.graphml"
+)
+```
+
+**Parameters:**
+
+* **`output_format`** (`str`, optional):  
+  Format to export. One of: `"json"`, `"dot"`, `"graphml"`. Defaults to `"json"`.
+* **`output_path`** (`str`, optional):  
+  Path to save the output file. If `None`, returns the formatted data as a string.
+
+**Returns:**
+
+* If `output_path` is provided: Path to the output file
+* If `output_path` is `None`: Formatted dependency data as a string
+
+#### `find_cycles`
+
+**Method: `DependencyAnalyzer.find_cycles`**  
+*(defined in `kit/dependency_analyzer/dependency_analyzer.py`)*
+
+Finds cycles (circular dependencies) in the dependency graph.
+
+```python
+cycles = analyzer.find_cycles()
+if cycles:
+    print(f"Found {len(cycles)} circular dependencies:")
+    for cycle in cycles:
+        print(f"  {' → '.join(cycle)} → {cycle[0]}")
+```
+
+**Returns:**
+
+* A list of cycles, where each cycle is a list of component identifiers
+
+#### `visualize_dependencies`
+
+**Method: `DependencyAnalyzer.visualize_dependencies`**  
+*(defined in `kit/dependency_analyzer/dependency_analyzer.py`)*
+
+Generates a visualization of the dependency graph.
+
+```python
+# Generate a PNG visualization
+viz_file = analyzer.visualize_dependencies(
+    output_path="dependency_graph", 
+    format="png"
+)
+```
+
+**Parameters:**
+
+* **`output_path`** (`str`, required):  
+  Path to save the visualization (without extension).
+* **`format`** (`str`, optional):  
+  Output format. One of: `"png"`, `"svg"`, `"pdf"`. Defaults to `"png"`.
+
+**Returns:**
+
+* Path to the generated visualization file
+
+#### `generate_llm_context`
+
+**Method: `DependencyAnalyzer.generate_llm_context`**  
+*(defined in `kit/dependency_analyzer/dependency_analyzer.py`)*
+
+Generates a concise, natural language description of the dependency graph optimized for LLM consumption.
+
+```python
+# Generate markdown context
+context = analyzer.generate_llm_context(
+    max_tokens=4000,
+    output_format="markdown",
+    output_path="dependency_context.md"
+)
+
+# Or generate plain text context
+context = analyzer.generate_llm_context(
+    max_tokens=4000,
+    output_format="text",
+    output_path="dependency_context.txt"
+)
+```
+
+**Parameters:**
+
+* **`max_tokens`** (`int`, optional):  
+  Approximate maximum number of tokens in the output (rough guideline). Defaults to 4000.
+* **`output_format`** (`str`, optional):  
+  Format of the output. One of: `"markdown"`, `"text"`. Defaults to `"markdown"`.
+* **`output_path`** (`str`, optional):  
+  Path to save the output to a file. If `None`, returns the formatted string.
+
+**Returns:**
+
+* A string containing the natural language description of the dependency structure
+
+#### Factory Method: `get_for_language`
+
+**Method: `DependencyAnalyzer.get_for_language`**  
+*(defined in `kit/dependency_analyzer/dependency_analyzer.py`)*
+
+Factory method to get an appropriate `DependencyAnalyzer` for the specified language. This is typically used internally by the `Repository.get_dependency_analyzer` method.
+
+```python
+analyzer = DependencyAnalyzer.get_for_language(repository, "python")
+```
+
+**Parameters:**
+
+* **`repository`** (`Repository`, required):  
+  A Kit `Repository` instance.
+* **`language`** (`str`, required):  
+  Language identifier (e.g., `"python"`, `"terraform"`).
+
+**Returns:**
+
+* An appropriate `DependencyAnalyzer` instance for the language
+
+## Language-Specific Implementations
+
+### PythonDependencyAnalyzer
+
+**Class: `PythonDependencyAnalyzer`**  
+*(defined in `kit/dependency_analyzer/python_dependency_analyzer.py`)*
+
+The `PythonDependencyAnalyzer` extends the base `DependencyAnalyzer` to analyze Python codebases, focusing on import relationships between modules.
+
+#### Additional Methods
+
+##### `get_module_dependencies`
+
+**Method: `PythonDependencyAnalyzer.get_module_dependencies`**  
+*(defined in `kit/dependency_analyzer/python_dependency_analyzer.py`)*
+
+Gets dependencies for a specific Python module.
+
+```python
+# Get direct dependencies
+deps = python_analyzer.get_module_dependencies("my_package.my_module")
+
+# Get all dependencies (including indirect)
+all_deps = python_analyzer.get_module_dependencies(
+    "my_package.my_module", 
+    include_indirect=True
+)
+```
+
+**Parameters:**
+
+* **`module_name`** (`str`, required):  
+  Name of the module to check.
+* **`include_indirect`** (`bool`, optional):  
+  Whether to include indirect dependencies. Defaults to `False`.
+
+**Returns:**
+
+* List of module names this module depends on
+
+##### `get_file_dependencies`
+
+**Method: `PythonDependencyAnalyzer.get_file_dependencies`**  
+*(defined in `kit/dependency_analyzer/python_dependency_analyzer.py`)*
+
+Gets detailed dependency information for a specific file.
+
+```python
+file_deps = python_analyzer.get_file_dependencies("path/to/file.py")
+```
+
+**Parameters:**
+
+* **`file_path`** (`str`, required):  
+  Path to the file to analyze.
+
+**Returns:**
+
+* Dictionary with dependency information for the file
+
+##### `generate_dependency_report`
+
+**Method: `PythonDependencyAnalyzer.generate_dependency_report`**  
+*(defined in `kit/dependency_analyzer/python_dependency_analyzer.py`)*
+
+Generates a comprehensive dependency report for the repository.
+
+```python
+report = python_analyzer.generate_dependency_report(
+    output_path="dependency_report.json"
+)
+```
+
+**Parameters:**
+
+* **`output_path`** (`str`, optional):  
+  Path to save the report JSON. If `None`, returns the report data without saving.
+
+**Returns:**
+
+* Dictionary with the complete dependency report
+
+### TerraformDependencyAnalyzer
+
+**Class: `TerraformDependencyAnalyzer`**  
+*(defined in `kit/dependency_analyzer/terraform_dependency_analyzer.py`)*
+
+The `TerraformDependencyAnalyzer` extends the base `DependencyAnalyzer` to analyze Terraform (HCL) codebases, focusing on relationships between infrastructure resources, modules, variables, and other Terraform components.
+
+#### Additional Methods
+
+##### `get_resource_dependencies`
+
+**Method: `TerraformDependencyAnalyzer.get_resource_dependencies`**  
+*(defined in `kit/dependency_analyzer/terraform_dependency_analyzer.py`)*
+
+Gets dependencies for a specific Terraform resource.
+
+```python
+# Get direct dependencies
+deps = terraform_analyzer.get_resource_dependencies("aws_s3_bucket.example")
+
+# Get all dependencies (including indirect)
+all_deps = terraform_analyzer.get_resource_dependencies(
+    "aws_s3_bucket.example", 
+    include_indirect=True
+)
+```
+
+**Parameters:**
+
+* **`resource_id`** (`str`, required):  
+  ID of the resource to check (e.g., `"aws_s3_bucket.example"`).
+* **`include_indirect`** (`bool`, optional):  
+  Whether to include indirect dependencies. Defaults to `False`.
+
+**Returns:**
+
+* List of resource IDs this resource depends on
+
+##### `get_resource_by_type`
+
+**Method: `TerraformDependencyAnalyzer.get_resource_by_type`**  
+*(defined in `kit/dependency_analyzer/terraform_dependency_analyzer.py`)*
+
+Finds all resources of a specific type.
+
+```python
+# Find all S3 buckets
+s3_buckets = terraform_analyzer.get_resource_by_type("aws_s3_bucket")
+```
+
+**Parameters:**
+
+* **`resource_type`** (`str`, required):  
+  Type of resource to find (e.g., `"aws_s3_bucket"`).
+
+**Returns:**
+
+* List of resource IDs matching the specified type
+
+##### `generate_resource_documentation`
+
+**Method: `TerraformDependencyAnalyzer.generate_resource_documentation`**  
+*(defined in `kit/dependency_analyzer/terraform_dependency_analyzer.py`)*
+
+Generates documentation for Terraform resources in the codebase.
+
+```python
+docs = terraform_analyzer.generate_resource_documentation(
+    output_path="terraform_resources.md"
+)
+```
+
+**Parameters:**
+
+* **`output_path`** (`str`, optional):  
+  Path to save the documentation. If `None`, returns the documentation string.
+
+**Returns:**
+
+* String containing the markdown documentation of resources
+
+### GoDependencyAnalyzer
+
+**Class: `GoDependencyAnalyzer`**
+*(defined in `kit/dependency_analyzer/go_dependency_analyzer.py`)*
+
+The `GoDependencyAnalyzer` extends the base `DependencyAnalyzer` to analyze Go codebases, focusing on package import relationships.
+
+#### Additional Methods
+
+##### `get_package_dependencies`
+
+**Method: `GoDependencyAnalyzer.get_package_dependencies`**
+*(defined in `kit/dependency_analyzer/go_dependency_analyzer.py`)*
+
+Gets dependencies for a specific Go package.
+
+```python
+# Get direct dependencies
+deps = go_analyzer.get_package_dependencies("github.com/myorg/myapp/pkg/server")
+
+# Get all dependencies (including indirect)
+all_deps = go_analyzer.get_package_dependencies(
+    "github.com/myorg/myapp/pkg/server",
+    include_indirect=True
+)
+```
+
+**Parameters:**
+
+* **`package_path`** (`str`, required):
+  Full import path of the package to check.
+* **`include_indirect`** (`bool`, optional):
+  Whether to include indirect dependencies. Defaults to `False`.
+
+**Returns:**
+
+* List of package import paths this package depends on
+
+### JavaScriptDependencyAnalyzer
+
+**Class: `JavaScriptDependencyAnalyzer`**
+*(defined in `kit/dependency_analyzer/javascript_dependency_analyzer.py`)*
+
+The `JavaScriptDependencyAnalyzer` extends the base `DependencyAnalyzer` to analyze JavaScript and TypeScript codebases, supporting both ESM (`import`) and CommonJS (`require`) module systems.
+
+#### Additional Methods
+
+##### `get_module_dependencies`
+
+**Method: `JavaScriptDependencyAnalyzer.get_module_dependencies`**
+*(defined in `kit/dependency_analyzer/javascript_dependency_analyzer.py`)*
+
+Gets dependencies for a specific JavaScript/TypeScript module.
+
+```python
+# Get direct dependencies
+deps = js_analyzer.get_module_dependencies("src/index.js")
+
+# Get all dependencies (including indirect)
+all_deps = js_analyzer.get_module_dependencies(
+    "src/index.js",
+    include_indirect=True
+)
+```
+
+**Parameters:**
+
+* **`module_path`** (`str`, required):
+  Path to the module file.
+* **`include_indirect`** (`bool`, optional):
+  Whether to include indirect dependencies. Defaults to `False`.
+
+**Returns:**
+
+* List of module paths/package names this module depends on
+
+##### `generate_dependency_report`
+
+**Method: `JavaScriptDependencyAnalyzer.generate_dependency_report`**
+*(defined in `kit/dependency_analyzer/javascript_dependency_analyzer.py`)*
+
+Generates a comprehensive dependency report for the repository.
+
+```python
+report = js_analyzer.generate_dependency_report(
+    output_path="dependency_report.json"
+)
+```
+
+**Parameters:**
+
+* **`output_path`** (`str`, optional):
+  Path to save the report JSON. If `None`, returns the report data without saving.
+
+**Returns:**
+
+* Dictionary with the complete dependency report including:
+  * Package name (from package.json)
+  * Internal module count
+  * External package count
+  * Node.js built-in usage
+  * Detected cycles
+  * High-dependency modules
+
+#### Supported Import Styles
+
+The JavaScript analyzer detects:
+- ESM imports: `import x from 'pkg'`, `import { x } from 'pkg'`
+- ESM re-exports: `export { x } from 'pkg'`, `export * from 'pkg'`
+- CommonJS: `require('pkg')`
+- Dynamic imports: `import('pkg')`
+
+#### Dependency Classification
+
+Dependencies are classified as:
+- **internal**: Relative imports (`./`, `../`)
+- **external**: npm packages (including scoped `@org/pkg`)
+- **node_builtin**: Node.js built-in modules (`fs`, `path`, `http`, etc.)
+
+### RustDependencyAnalyzer
+
+**Class: `RustDependencyAnalyzer`**
+*(defined in `kit/dependency_analyzer/rust_dependency_analyzer.py`)*
+
+The `RustDependencyAnalyzer` extends the base `DependencyAnalyzer` to analyze Rust codebases, focusing on crate and module dependencies.
+
+#### Additional Methods
+
+##### `get_module_dependencies`
+
+**Method: `RustDependencyAnalyzer.get_module_dependencies`**
+*(defined in `kit/dependency_analyzer/rust_dependency_analyzer.py`)*
+
+Gets dependencies for a specific Rust module.
+
+```python
+# Get direct dependencies
+deps = rust_analyzer.get_module_dependencies("src/lib.rs")
+
+# Get all dependencies (including indirect)
+all_deps = rust_analyzer.get_module_dependencies(
+    "src/lib.rs",
+    include_indirect=True
+)
+```
+
+**Parameters:**
+
+* **`module_path`** (`str`, required):
+  Path to the module file.
+* **`include_indirect`** (`bool`, optional):
+  Whether to include indirect dependencies. Defaults to `False`.
+
+**Returns:**
+
+* List of module paths/crate names this module depends on
+
+##### `generate_dependency_report`
+
+**Method: `RustDependencyAnalyzer.generate_dependency_report`**
+*(defined in `kit/dependency_analyzer/rust_dependency_analyzer.py`)*
+
+Generates a comprehensive dependency report for the repository.
+
+```python
+report = rust_analyzer.generate_dependency_report(
+    output_path="dependency_report.json"
+)
+```
+
+**Parameters:**
+
+* **`output_path`** (`str`, optional):
+  Path to save the report JSON. If `None`, returns the report data without saving.
+
+**Returns:**
+
+* Dictionary with the complete dependency report including:
+  * Crate name (from Cargo.toml)
+  * Internal module count
+  * External crate count
+  * Std library usage
+  * Detected cycles
+  * High-dependency modules
+
+#### Supported Import Styles
+
+The Rust analyzer detects:
+- `use` statements: `use std::collections::HashMap`
+- `mod` declarations: `mod utils;`, `pub mod config;`
+- `extern crate` (legacy): `extern crate serde;`
+
+#### Dependency Classification
+
+Dependencies are classified as:
+- **internal**: Module declarations and crate-internal references
+- **external**: Crates from Cargo.toml dependencies
+- **std**: Rust standard library crates (`std`, `core`, `alloc`, `proc_macro`, `test`)
+
+## Key Features and Notes
+
+- All dependency analyzers store absolute file paths for resources, making it easy to locate components in complex codebases with files that might have the same name in different directories.
+
+- The `generate_llm_context` method produces summaries specially formatted for use as context with LLMs, focusing on the most significant patterns and keeping the token count manageable.
+
+- Visualizations require the Graphviz software to be installed on your system.
+
+- The dependency graph is built on first use and cached. If the codebase changes, you may need to call `build_dependency_graph()` again to refresh the analysis.
+
+- **Supported languages**: Python, Terraform, Go, JavaScript/TypeScript, Rust

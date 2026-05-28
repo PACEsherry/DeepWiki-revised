@@ -1,0 +1,218 @@
+---
+title: Build an AI PR Reviewer
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="tip">
+**Looking for a ready-to-use PR reviewer?** Kit includes a production-ready AI PR reviewer available via `kit review`. See the [CLI documentation](/introduction/cli#pr-review-operations) for setup and usage. This tutorial shows you how to build your own custom reviewer using kit's components.
+</Aside>
+
+`kit` shines when an LLM needs to *understand a change in the context of the **entire** code-base*—exactly what a human reviewer does. 
+A good review often requires looking beyond the immediate lines changed to understand their implications, check for consistency with existing patterns, and ensure no unintended side-effects arise. This tutorial walks through a **minimal but complete** AI PR-review bot that demonstrates how `kit` provides this crucial whole-repo context.
+
+1.  Fetches a GitHub PR (diff + metadata).
+2.  Builds a `kit.Repository` for the **changed branch** so we can query *any* file, symbol or dependency as it exists in that PR.
+3.  Generates a focused context bundle with `kit.llm_context.ContextAssembler`, which intelligently combines the diff, the full content of changed files, relevant neighboring code, and even semantically similar code from elsewhere in the repository.
+4.  Sends the bundle to an LLM and posts the comments back to GitHub.
+
+By the end you will see how a few dozen lines of Python—plus `kit`—give your LLM the *whole-repo* superpowers, enabling it to perform more insightful and human-like code reviews.
+
+## 1. Fetch PR data
+
+To start, our AI reviewer needs the raw materials of the pull request. 
+
+Use the GitHub REST API to grab the *diff* **and** the PR-head **commit SHA**:
+
+```python
+import os, requests
+
+def fetch_pr(repo, pr_number):
+    """Return the PR's unified diff **and** head commit SHA."""
+    token = os.getenv("GITHUB_TOKEN")
+    url   = f"https://api.github.com/repos/{repo}/pulls/{pr_number}"
+
+    # 1) Unified diff
+    diff_resp = requests.get(
+        url,
+        headers={
+            "Accept": "application/vnd.github.v3.diff",
+            "Authorization": f"token {token}",
+        },
+        timeout=15,
+    )
+    diff_resp.raise_for_status()
+    diff = diff_resp.text
+
+    # 2) JSON metadata (for head SHA, title, description, …)
+    meta_resp = requests.get(
+        url,
+        headers={
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"token {token}",
+        },
+        timeout=15,
+    )
+    meta_resp.raise_for_status()
+    pr_info = meta_resp.json()
+
+    head_sha = pr_info["head"]["sha"]
+    return diff, head_sha
+```
+
+---
+## 2. Create a `Repository` for the PR branch
+
+With the `head_sha` obtained, we **ideally** want to load the repository *at that exact commit*.  Today, `kit.Repository` will clone the **default branch** of a remote repository (usually `main`) when you pass a URL.  If you need the precise PR-head commit you have two options:
+
+1. Clone the repo yourself, `git checkout <head_sha>`, and then point `Repository` at that local path.
+2. Call `Repository(url)` to fetch the default branch **and** apply the PR diff in memory (as we do later in this tutorial).  For many review tasks this is sufficient because the changed files still exist on `main`, and the diff contains the exact edits.
+
+Direct `ref=`/commit checkout support is coming shortly.
+
+So for now we'll simply clone the default branch and rely on the diff for any code that hasn't been pushed upstream:
+
+```python
+from kit import Repository
+
+repo = Repository(
+    path_or_url="https://github.com/OWNER/REPO.git", # Replace with actual repo URL
+    github_token=os.getenv("GITHUB_TOKEN"),
+    cache_dir="~/.cache/kit",  # clones are cached for speed
+)
+```
+
+The `cache_dir` parameter tells `kit` where to store parts of remote repositories it fetches. 
+This caching significantly speeds up subsequent operations on the same repository or commit, which is very beneficial for a bot that might process multiple PRs or re-analyze a PR if it's updated.
+
+Now `repo` can *instantly* answer questions like:
+`repo.search_text("TODO")` (useful for checking if the PR resolves or introduces to-do items),
+`repo.extract_symbols('src/foo.py')` (to understand the structure of a changed file),
+`repo.find_symbol_usages('User')` (to see how a modified class or function is used elsewhere, helping to assess the impact of changes).
+These capabilities allow our AI reviewer to gather rich contextual information far beyond the simple diff.
+
+---
+## 3. Build context for the LLM
+
+The `ContextAssembler` is the workhorse for preparing the input to the LLM. It orchestrates several `kit` features to build a comprehensive understanding of the PR:
+
+```python
+from kit import Repository
+from unidiff import PatchSet
+from sentence_transformers import SentenceTransformer
+
+# Assume `repo`, `diff`, `pr_title`, `pr_description` are defined
+# `diff` is the raw diff string
+# `pr_title`, `pr_description` are strings from your PR metadata
+
+# -------------------------------------------------
+# 1) Build or load the semantic index so search_semantic works
+# -------------------------------------------------
+st_model = SentenceTransformer("all-MiniLM-L6-v2")
+embed_fn = lambda text: st_model.encode(text).tolist()
+
+vs = repo.get_vector_searcher(embed_fn)
+vs.build_index()  # do this once; subsequent runs can skip if cached
+
+# -------------------------------------------------
+# 2) Assemble context for the LLM
+# -------------------------------------------------
+assembler = repo.get_context_assembler()
+patch = PatchSet(diff)
+
+# Add the raw diff
+assembler.add_diff(diff)
+
+# Add full content of changed / added files – with safety guards
+LOCK_FILES = {
+    "package-lock.json",
+    "yarn.lock",
+    "pnpm-lock.yaml",
+    "poetry.lock",
+    "Cargo.lock",
+    "composer.lock",
+}
+
+for p_file in patch:
+    if p_file.is_removed_file:
+        continue  # nothing to embed
+
+    assembler.add_file(
+        p_file.path,
+        max_lines=400,              # Inline only if the file is reasonably small
+        skip_if_name_in=LOCK_FILES, # Skip bulky lock files entirely (diff already added)
+    )
+
+# Semantic search for related code using PR title/description
+for q in filter(None, [pr_title, pr_description]):
+    q = q.strip()
+    if not q:
+        continue
+    hits = repo.search_semantic(q, top_k=3, embed_fn=embed_fn)
+    assembler.add_search_results(hits, query=f"Code semantically related to: '{q}'")
+
+context_blob = assembler.format_context()
+```
+
+The `ContextAssembler` is used as follows:
+
+1.  **`assembler.add_diff(diff)`**: This provides the LLM with the direct changes from the PR.
+2.  **`assembler.add_file(p_file.path)`**: Supplying the full content of changed files allows the LLM to see modifications in their complete original context, not just the diff hunks.
+3.  **Augment with Semantic Search (`assembler.add_search_results(...)`)**: This is a key step where `kit` truly empowers the AI reviewer. Beyond direct code connections, `kit`'s `repo.search_semantic()` method can unearth other code sections that are *conceptually related* to the PR's intent, even if not directly linked by calls or imports.
+
+    You can use queries derived from the PR's title or description to find examples of similar functionality, relevant design patterns, or areas that might require parallel updates.
+
+    **The Power of Summaries**: While `repo.search_semantic()` can operate on raw code, its effectiveness is significantly amplified when your `Repository` instance is configured with a `DocstringIndexer`. The `DocstringIndexer` (see the [Docstring Search Tutorial](/tutorials/docstring_search)) preprocesses your codebase, generating AI summaries for files or symbols. When `repo.search_semantic()` leverages this index, it matches based on the *meaning and purpose* captured in these summaries, leading to far more relevant and insightful results than simple keyword or raw-code vector matching. This allows the AI reviewer to understand context like "find other places where we handle user authentication" even if the exact phrasing or code structure varies.
+
+    The Python code snippet above illustrates how you might integrate this. Remember to ensure your `repo` object is properly set up with an embedding function and, for best results, a `DocstringIndexer`. Refer to the "[Docstring Search](/tutorials/docstring_search)" and "[Semantic Code Search](/tutorials/semantic_code_search)" tutorials for detailed setup guidance.
+
+Finally, `assembler.format_context()` consolidates all the added information into a single string (`context_blob`), ready to be sent to the LLM. This step might also involve applying truncation or specific formatting to optimise for the LLM's input requirements.
+
+---
+## 4. Prepare the LLM Prompt
+
+With the meticulously assembled `context_blob` from `kit`, we can now prompt an LLM. The quality of the prompt—including the system message that sets the LLM's role and the user message containing the context—is vital. Because `kit` has provided such comprehensive and well-structured context, the LLM is significantly better equipped to act like an "expert software engineer" and provide a nuanced, insightful review.
+
+```python
+from openai import OpenAI
+
+client = OpenAI()
+msg = client.chat.completions.create(
+    model="gpt-4o",
+    temperature=0.2,
+    messages=[
+        {"role": "system", "content": "You are an expert software engineer …"},
+        {"role": "user",   "content": f"PR context:\n```\n{context_blob}\n```\nGive a review."},
+    ],
+)
+review = msg.choices[0].message.content.strip()
+```
+
+---
+## 5. Post the review back to GitHub
+
+This final step completes the loop by taking the LLM's generated review and posting it as a comment on the GitHub pull request. This delivers the AI's insights directly to the developers, integrating the AI reviewer into the existing development workflow.
+
+```python
+requests.post(
+    f"https://api.github.com/repos/{repo_full}/issues/{pr_number}/comments",
+    headers={
+        "Authorization": f"token {os.getenv('GITHUB_TOKEN')}",
+        "Accept": "application/vnd.github.v3+json",
+    },
+    json={"body": review},
+    timeout=10,
+).raise_for_status()
+```
+
+---
+## Where to go next?
+
+This tutorial provides a foundational AI PR reviewer. `kit`'s components can help you extend it further:
+
+* **Chunk large diffs or files** – If a PR is very large, the `ContextAssembler` currently adds full content. You might need strategies to chunk very large files (e.g. `repo.chunk_file_by_symbols`) or diffs, or implement more granular context addition to stay within LLM limits.
+* **Custom ranking** – The `ContextAssembler` could be configured or extended to allow different weights for various context pieces (e.g. prioritising semantic-search matches that are highly relevant over less critical information). `kit`'s search results, which include scores, can inform this process.
+* **Inline comments** – Parse the LLM's output to identify suggestions pertaining to specific files and lines, then use GitHub's *review* API to post comments directly on the diff. `kit`'s symbol mapping (line numbers from `RepoMapper`) is crucial here.
+* **Supersonic** – For more advanced automation, tools like Supersonic could leverage `kit`'s understanding to not just *suggest* but also *apply* LLM-recommended changes, potentially opening follow-up PRs.
+
+> With `kit` your LLM sees code the way *humans* do: in the rich context of the entire repository. Better signal in → better reviews out.

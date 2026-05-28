@@ -1,0 +1,118 @@
+---
+title: kit-dev mcp Server
+description: Enhanced MCP server for AI-powered development assistants
+---
+
+import { LinkCard, Aside, Card, CardGrid } from '@astrojs/starlight/components';
+
+# kit-dev mcp Server
+
+The kit-dev mcp Server transforms your AI assistant (Cursor, Claude Desktop, VS Code) into an active development partner with 13 specialized tools for real coding work.
+
+<LinkCard
+  title="🚀 Visit Full Documentation"
+  description="Complete setup guides, tool references, and examples"
+  href="https://kit-mcp.cased.com"
+/>
+
+## Quick Overview
+
+kit-dev mcp provides enhanced development capabilities beyond basic code search:
+
+<CardGrid>
+  <Card title="13 Development Tools" icon="rocket">
+    - Code search & analysis
+    - File watching & monitoring
+    - Symbol extraction
+    - Git integration
+    - Deep package research
+  </Card>
+  <Card title="100% Private & Free" icon="shield">
+    - Runs entirely on YOUR machine
+    - Your code never leaves your computer
+    - Free forever (just pay for LLM tokens)
+    - MIT licensed & open source
+  </Card>
+</CardGrid>
+
+## Quick Installation
+
+### For Cursor
+
+Add to your Cursor MCP settings (`~/.cursor/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "kit-dev-mcp": {
+      "command": "uvx",
+      "args": ["--from", "cased-kit", "kit-dev-mcp"],
+      "env": {
+        "OPENAI_API_KEY": "sk-...",  // Optional for deep research
+        "OPENAI_BASE_URL": "https://your-proxy.com/v1"  // Optional for custom OpenAI endpoints
+      }
+    }
+  }
+}
+```
+
+### For Claude Desktop
+
+Add to your Claude Desktop config:
+
+```json
+{
+  "mcpServers": {
+    "kit-dev-mcp": {
+      "command": "python",
+      "args": ["-m", "kit.mcp.dev"],
+      "env": {
+        "OPENAI_API_KEY": "sk-...",  // Optional for deep research
+        "OPENAI_BASE_URL": "https://your-proxy.com/v1",  // Optional for custom OpenAI endpoints
+        "CHROMA_PACKAGE_SEARCH_API_KEY": "..."  // Optional for package source search
+      }
+    }
+  }
+}
+```
+
+## Available Tools
+
+The server provides many tools including:
+
+- **open_repository** - Open local or remote Git repositories
+- **grep_code** - Fast literal string search (120s default timeout, configurable via `KIT_GREP_TIMEOUT`)
+- **grep_ast** - Search code using AST patterns (semantic search)
+- **get_file_tree** - Repository file structure with pagination support (`limit`/`offset` params)
+- **extract_symbols** - Extract functions, classes, and symbols (excludes code by default for ~90% token savings; use `include_code=true` to get full source)
+- **get_symbol_code** - Get source code of a specific symbol (lazy loading for context efficiency)
+- **find_symbol_usages** - Find where symbols are used
+- **warm_cache** - Pre-warm caches for faster operations on large codebases (100K+ files)
+- **review_diff** - AI-powered diff reviews
+- **deep_research_package** - Comprehensive package documentation
+- **package_search_grep** - Search package source code with regex patterns
+- **package_search_hybrid** - Semantic search in package source code
+- **package_search_read_file** - Read specific files from packages
+
+<Aside type="tip" title="Large Codebases">
+For repositories with 50K+ files (Linux kernel, Kubernetes, etc.):
+- Use `warm_cache` first to pre-load the file tree (~3-5s for 100K files)
+- Use `get_file_tree` with `limit`/`offset` for pagination
+- `grep_code` now defaults to 120s timeout (set `KIT_GREP_TIMEOUT` env var to adjust)
+</Aside>
+
+## Learn More
+
+<LinkCard
+  title="Complete Documentation →"
+  description="Setup guides, examples, workflows, and more"
+  href="https://kit-mcp.cased.com"
+/>
+
+<Aside type="tip">
+The dedicated site includes:
+- Detailed setup for all AI assistants
+- Complete tool reference with examples
+- Development workflows and best practices
+- Comparison with other MCP servers
+</Aside>

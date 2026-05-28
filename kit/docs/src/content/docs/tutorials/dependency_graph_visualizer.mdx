@@ -1,0 +1,130 @@
+---
+title: Dependency Graph Visualizer in Python
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+This tutorial demonstrates how to visualize the dependency graph of a codebase using `kit`. `kit`'s `DependencyAnalyzer` supports analyzing dependencies in both Python and Terraform codebases, and can output the graph in DOT format, which you can render with Graphviz to generate visual diagrams.
+
+For Python codebases, the analyzer leverages Abstract Syntax Tree (AST) parsing to track import relationships between modules. For Terraform codebases, it analyzes resource references and dependencies between infrastructure components.
+
+<Aside type="note">
+  To directly generate an image (e.g., PNG, SVG) without manually handling DOT files, you can use the `analyzer.visualize_dependencies()` method, provided you have both the `graphviz` Python package and the Graphviz system executables installed.
+</Aside>
+
+## Step 1: Generate the Dependency Graph in DOT Format
+
+The `kit.Repository` object provides access to a `DependencyAnalyzer` which can build and export the dependency graph.
+
+```python
+from kit import Repository
+
+def generate_dot_dependency_graph(repo_path: str) -> str:
+    """
+    Initializes a Repository, gets its DependencyAnalyzer,
+    and exports the dependency graph in DOT format.
+    """
+    repo = Repository(repo_path)
+    # Specify the language ('python' or 'terraform')
+    analyzer = repo.get_dependency_analyzer('python')
+    
+    # The build_dependency_graph() method is called implicitly by export_dependency_graph
+    # if the graph hasn't been built yet.
+    dot_output = analyzer.export_dependency_graph(output_format='dot')
+    
+    # Ensure dot_output is a string. export_dependency_graph returns the content 
+    # when output_path is None.
+    if not isinstance(dot_output, str):
+        # This case should ideally not happen if output_format='dot' and output_path=None
+        # based on typical implementations, but good to be defensive.
+        raise TypeError(f"Expected DOT output as string, got {type(dot_output)}")
+
+    return dot_output
+```
+
+This function `generate_dot_dependency_graph`:
+1. Initializes the `Repository` for the given `repo_path`.
+2. Gets a `DependencyAnalyzer` instance from the repository.
+3. Calls `analyzer.export_dependency_graph(output_format='dot')` to get the graph data as a DOT formatted string.
+
+## Step 2: Command-Line Interface
+
+Add CLI arguments for the repository path and an optional output file for the DOT content.
+
+```python
+import argparse
+
+# Assume generate_dot_dependency_graph function from Step 1 is defined above
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Dependency graph visualizer using kit.")
+    parser.add_argument("--repo", required=True, help="Path to the code repository")
+    parser.add_argument("--output", help="Output DOT file (default: stdout)")
+    args = parser.parse_args()
+    
+    try:
+        dot_content = generate_dot_dependency_graph(args.repo)
+        if args.output:
+            with open(args.output, "w") as f:
+                f.write(dot_content)
+            print(f"Dependency graph (DOT format) written to {args.output}")
+        else:
+            print(dot_content)
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        # For more detailed debugging, you might want to print the traceback
+        # import traceback
+        # traceback.print_exc()
+
+if __name__ == "__main__":
+    main()
+```
+
+## Step 3: Running the Script
+
+Run the visualizer script from your terminal. Provide the path to the repository and optionally an output file name for the DOT data.
+
+```sh
+python your_script_name.py --repo /path/to/your/python_project --output project_deps.dot
+```
+
+Replace `your_script_name.py` with the actual name of your Python file containing the code from Steps 1 and 2.
+
+## Step 4: Rendering the Graph
+
+To visualize the generated DOT file, you need Graphviz installed on your system. Use the `dot` command-line tool:
+
+```sh
+dot -Tpng project_deps.dot -o project_deps.png
+```
+
+This will create a PNG image (`project_deps.png`) of your codebase's import relationships.
+
+## Extending the Visualizer
+
+`kit`'s `DependencyAnalyzer` offers more than just DOT export:
+
+- **Direct Visualization**: Use `analyzer.visualize_dependencies(output_path="graph_image_prefix", format="png")` to directly save an image (requires the `graphviz` Python library).
+- **Other Export Formats**: Export to JSON, GraphML, or an adjacency list using `analyzer.export_dependency_graph(output_format=...)`.
+- **Cycle Detection**: Use `analyzer.find_cycles()` to identify circular dependencies.
+- **Querying the Graph**: 
+  - For Python: Use `analyzer.get_module_dependencies()` and `analyzer.get_dependents()` to explore module relationships.
+  - For Terraform: Use `analyzer.get_resource_dependencies()` and `analyzer.get_resource_by_type()` to explore infrastructure dependencies.
+- **Reports and Context**: 
+  - Generate a comprehensive JSON report with `analyzer.generate_dependency_report()`.
+  - Create LLM-friendly context with `analyzer.generate_llm_context()`.
+- **File Paths**: The analyzer tracks absolute file paths for each component, making it easy to locate resources in complex projects.
+
+## Using with Terraform
+
+To analyze a Terraform codebase instead of Python, simply specify 'terraform' when getting the analyzer:
+
+```python
+analyzer = repo.get_dependency_analyzer('terraform')
+```
+
+The Terraform analyzer will map dependencies between resources, modules, variables, and other Terraform components. All resources in the graph include their absolute file paths, making it easy to locate them in complex infrastructure projects with files that might have the same name in different directories.
+
+## Conclusion
+
+Visualizing dependencies helps you understand, refactor, and document complex codebases. With `kit`'s `DependencyAnalyzer` and tools like Graphviz, you can gain valuable insights into your project's structure, whether it's a Python application or Terraform infrastructure.

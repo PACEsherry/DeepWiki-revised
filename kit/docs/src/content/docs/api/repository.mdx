@@ -1,0 +1,596 @@
+---
+title: "Repository API"
+description: "Complete reference for Repository class methods and properties"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Repository API
+
+The `Repository` class is the main entry point for analyzing code repositories with Kit.
+
+## Core Methods
+
+### `get_file_tree(subpath=None)`
+
+Returns the file tree structure of the repository.
+
+**Parameters:**
+- `subpath` (str, optional): Subdirectory path relative to repo root. If None, returns entire repo tree. If specified, returns tree starting from that subdirectory.
+
+**Returns:**
+- `List[Dict[str, Any]]`: List of file/directory objects with `path`, `is_dir`, `name`, and `size` fields.
+
+**Examples:**
+
+```python
+from kit import Repository
+
+repo = Repository("/path/to/repo")
+
+# Get full repository tree
+full_tree = repo.get_file_tree()
+
+# Get tree for specific subdirectory  
+src_tree = repo.get_file_tree(subpath="src")
+components_tree = repo.get_file_tree(subpath="src/components")
+```
+
+### `grep(pattern, *, case_sensitive=True, include_pattern=None, exclude_pattern=None, max_results=1000)`
+
+Performs literal grep search on repository files using system grep.
+
+**Parameters:**
+- `pattern` (str): The literal string to search for (not a regex)
+- `case_sensitive` (bool): Whether the search should be case sensitive. Defaults to True
+- `include_pattern` (str, optional): Glob pattern for files to include (e.g. '*.py')
+- `exclude_pattern` (str, optional): Glob pattern for files to exclude
+- `max_results` (int): Maximum number of results to return. Defaults to 1000
+
+**Returns:**
+- `List[Dict[str, Any]]`: List of matches with `file`, `line_number`, and `line_content` fields
+
+**Examples:**
+
+```python
+from kit import Repository
+
+repo = Repository("/path/to/repo")
+
+# Basic search
+matches = repo.grep("TODO")
+
+# Case insensitive search
+matches = repo.grep("function", case_sensitive=False)
+
+# Search only Python files
+matches = repo.grep("class", include_pattern="*.py")
+
+# Exclude test files
+matches = repo.grep("import", exclude_pattern="*test*")
+
+# Limit results
+matches = repo.grep("error", max_results=50)
+```
+
+**Note:** Requires system `grep` command to be available in PATH.
+
+### `extract_symbols(file_path=None)`
+
+Extracts symbols (functions, classes, etc.) from repository files.
+
+**Parameters:**
+- `file_path` (str, optional): Specific file to extract from. If None, extracts from all files.
+
+**Returns:**
+- `List[Dict[str, Any]]`: List of symbol objects with `name`, `type`, `start_line`, `end_line`, and `code` fields.
+
+### `search_text(query, file_pattern="*")`
+
+Searches for text patterns in repository files using Kit's built-in search.
+
+**Parameters:**
+- `query` (str): Text or regex pattern to search for
+- `file_pattern` (str): Glob pattern for files to search. Defaults to "*"
+
+**Returns:**
+- `List[Dict[str, Any]]`: List of search results
+
+### `get_file_content(file_path)`
+
+Reads and returns file content(s).
+
+**Parameters:**
+- `file_path` (str | List[str]): Single file path or list of file paths
+
+**Returns:**
+- `str | Dict[str, str]`: File content (single) or mapping of path → content (multiple)
+
+## Properties
+
+### `current_sha`
+Current git commit SHA (full).
+
+### `current_sha_short`  
+Current git commit SHA (short).
+
+### `current_branch`
+Current git branch name.
+
+### `remote_url`
+Git remote URL.
+
+### `is_dirty`
+Whether the working directory has uncommitted changes.
+
+## Utility Methods
+
+### `get_abs_path(relative_path)`
+Converts relative path to absolute path within repository.
+
+### `index()`
+Returns comprehensive repository index with file tree and symbols.
+
+### `write_symbols(file_path, symbols=None)`
+Writes symbols to JSON file.
+
+### `write_file_tree(file_path)`
+Writes file tree to JSON file.
+
+### `find_symbol_usages(symbol_name, symbol_type=None)`
+Finds all usages of a symbol across the repository.
+
+## Examples
+
+### Basic Repository Analysis
+
+```python
+from kit import Repository
+
+# Open repository
+repo = Repository("/path/to/project")
+
+# Get repository structure
+tree = repo.get_file_tree()
+print(f"Found {len(tree)} files and directories")
+
+# Extract all symbols
+symbols = repo.extract_symbols()
+print(f"Found {len(symbols)} symbols")
+
+# Search for TODOs
+todos = repo.grep("TODO", case_sensitive=False)
+print(f"Found {len(todos)} TODO items")
+```
+
+### Working with Subdirectories
+
+```python
+# Analyze only source code directory
+src_tree = repo.get_file_tree(subpath="src")
+src_symbols = repo.extract_symbols("src/main.py")
+
+# Search within specific directory
+api_todos = repo.grep("TODO", include_pattern="src/api/*.py")
+```
+
+### File Content Operations
+
+```python
+# Single file
+content = repo.get_file_content("README.md")
+
+# Multiple files
+contents = repo.get_file_content(["src/main.py", "src/utils.py"])
+for file_path, content in contents.items():
+    print(f"{file_path}: {len(content)} characters")
+```
+
+## Initialization
+
+```python
+from kit import Repository
+
+# Initialize with a local path
+local_repo = Repository("/path/to/your/local/project")
+
+# Initialize with a remote URL (requires git)
+# remote_repo = Repository("https://github.com/user/repo.git") 
+
+# Initialize at a specific commit, tag, or branch
+# versioned_repo = Repository("https://github.com/user/repo.git", ref="v1.2.3")
+```
+
+## Incremental Analysis Methods
+
+*   `extract_symbols_incremental()`: High-performance symbol extraction with caching.
+*   `get_incremental_stats()`: Get cache performance statistics.
+*   `cleanup_incremental_cache()`: Remove stale cache entries.
+*   `clear_incremental_cache()`: Clear all cached data.
+
+## Creating a `Repository` Instance
+
+To start using `kit`, first create an instance of the `Repository` class. This points `kit` to the codebase you want to analyze.
+
+```python
+from kit import Repository
+
+# For a local directory
+repository_instance = Repository(path_or_url="/path/to/local/project")
+
+# For a remote Git repository (public or private)
+# repository_instance = Repository(
+#     path_or_url="https://github.com/owner/repo-name", 
+#     github_token="YOUR_GITHUB_TOKEN",  # Optional: For private repos
+#     cache_dir="/path/to/cache",        # Optional: For caching clones
+#     ref="v1.2.3",                       # Optional: Specific commit, tag, or branch
+#     cache_ttl_hours=2,                  # Optional: New in v1.2.0
+# )
+```
+
+**Parameters:**
+
+*   `path_or_url` (str): The path to a local directory or the URL of a remote Git repository.
+*   `github_token` (Optional[str]): A GitHub personal access token required for cloning private repositories. If not provided, automatically checks the `KIT_GITHUB_TOKEN` and `GITHUB_TOKEN` environment variables. Defaults to `None`.
+*   `cache_dir` (Optional[str]): Path to a directory for caching cloned repositories. Defaults to a system temporary directory.
+*   `ref` (Optional[str]): Git reference (commit SHA, tag, or branch) to checkout. For remote repositories, this determines which version to clone. For local repositories, this will checkout the specified ref. Defaults to `None`.
+*   `cache_ttl_hours` (Optional[float]): **New in v1.2.0.** When cloning a remote repository, Kit stores the clone under `tmp/kit-repo-cache` (or your custom `cache_dir`).  On the *first* clone in each Python process Kit will delete any cached repo directory whose **modification time** is older than this many hours before continuing.  Pass `None` (default) or `0` to disable the cleanup.  You can also set the global environment variable `KIT_TMP_REPO_TTL_HOURS` to apply the policy process-wide without changing code.
+
+<Aside type="tip">
+**Automatic GitHub Token Pickup**
+
+For convenience, the Repository class automatically checks for GitHub tokens in environment variables when cloning remote repositories:
+
+1. First checks `KIT_GITHUB_TOKEN`
+2. Falls back to `GITHUB_TOKEN` if `KIT_GITHUB_TOKEN` is not set
+3. Uses `None` if neither environment variable is set
+
+This means you can set `export KIT_GITHUB_TOKEN="ghp_your_token"` and omit the `github_token` parameter entirely.
+</Aside>
+
+Once you have a `repository` object, you can call the following methods on it:
+
+## `repository.get_file_tree()`
+
+Returns the file tree structure of the repository.
+
+```python
+repository.get_file_tree() -> List[Dict[str, Any]]
+```
+
+**Returns:**
+
+*   `List[Dict[str, Any]]`: A list of dictionaries, where each dictionary represents a file or directory with keys like `path`, `name`, `is_dir`, `size`.
+
+## `repository.get_file_content()`
+
+Reads and returns the content of a specified file within the repository as a string.
+
+```python
+repository.get_file_content(file_path: str) -> str
+```
+
+**Parameters:**
+
+*   `file_path` (str): The path to the file, relative to the repository root.
+
+**Returns:**
+
+*   `str`: The content of the file.
+
+**Raises:**
+
+*   `FileNotFoundError`: If the file does not exist at the specified path.
+*   `IOError`: If any other I/O error occurs during file reading.
+
+## `repository.extract_symbols()`
+
+Extracts code symbols (functions, classes, variables, etc.) from the repository.
+
+```python
+repository.extract_symbols(file_path: Optional[str] = None) -> List[Dict[str, Any]]
+```
+
+**Parameters:**
+
+*   `file_path` (Optional[str]): If provided, extracts symbols only from this specific file path relative to the repo root. If `None`, extracts symbols from all supported files in the repository. Defaults to `None`.
+
+**Returns:**
+
+*   `List[Dict[str, Any]]`: A list of dictionaries, each representing a symbol with keys like `name`, `type`, `file`, `line_start`, `line_end`, `code`.
+
+## `repository.extract_symbols_incremental()`
+
+Extracts code symbols with intelligent caching for dramatically improved performance. Uses multiple invalidation strategies (mtime, size, content hash, git state) to ensure accuracy while providing 25-36x speedups for warm cache scenarios.
+
+```python
+repository.extract_symbols_incremental(file_path: Optional[str] = None) -> List[Dict[str, Any]]
+```
+
+**Parameters:**
+
+*   `file_path` (Optional[str]): If provided, extracts symbols only from this specific file path relative to the repo root. If `None`, extracts symbols from all supported files in the repository. Defaults to `None`.
+
+**Returns:**
+
+*   `List[Dict[str, Any]]`: A list of dictionaries, each representing a symbol with keys like `name`, `type`, `file`, `line_start`, `line_end`, `code`.
+
+**Performance:**
+
+- **Cold cache**: Full analysis with cache building
+- **Warm cache**: 25x faster using cached results
+- **Automatic invalidation**: Cache invalidated on git state changes, file modifications
+
+**Example:**
+
+```python
+# First call builds cache
+symbols = repository.extract_symbols_incremental()
+print(f"Found {len(symbols)} symbols")
+
+# Subsequent calls use cache (much faster)
+symbols = repository.extract_symbols_incremental()
+print(f"Found {len(symbols)} symbols (cached)")
+
+# Check performance
+stats = repository.get_incremental_stats()
+print(f"Cache hit rate: {stats['cache_hit_rate']}")
+```
+
+## `repository.get_incremental_stats()`
+
+Returns performance statistics for the incremental analysis system.
+
+```python
+repository.get_incremental_stats() -> Dict[str, Any]
+```
+
+**Returns:**
+
+*   `Dict[str, Any]`: Statistics dictionary containing:
+    - `cache_hit_rate`: Percentage of cache hits (0.0-1.0)
+    - `files_analyzed`: Number of files analyzed in last operation
+    - `cache_hits`: Total cache hits
+    - `cache_misses`: Total cache misses
+    - `avg_analysis_time`: Average time per file analysis
+    - `cache_size_mb`: Cache size in megabytes
+
+**Example:**
+
+```python
+stats = repository.get_incremental_stats()
+print(f"Cache hit rate: {stats['cache_hit_rate']:.1%}")
+print(f"Files analyzed: {stats['files_analyzed']}")
+print(f"Cache size: {stats['cache_size_mb']:.1f}MB")
+```
+
+## `repository.cleanup_incremental_cache()`
+
+Removes stale cache entries for files that no longer exist in the repository.
+
+```python
+repository.cleanup_incremental_cache() -> int
+```
+
+**Returns:**
+
+*   `int`: Number of stale entries removed.
+
+**Example:**
+
+```python
+removed_count = repository.cleanup_incremental_cache()
+print(f"Removed {removed_count} stale cache entries")
+```
+
+## `repository.clear_incremental_cache()`
+
+Clears all cached data for the incremental analysis system.
+
+```python
+repository.clear_incremental_cache() -> None
+```
+
+**Example:**
+
+```python
+repository.clear_incremental_cache()
+print("Cache cleared")
+```
+
+## `repository.search_text()`
+
+Searches for literal text or regex patterns within files.
+
+```python
+repository.search_text(query: str, file_pattern: str = "*.py") -> List[Dict[str, Any]]
+```
+
+**Parameters:**
+
+*   `query` (str): The text or regex pattern to search for.
+*   `file_pattern` (str): A glob pattern to filter files to search within. Defaults to `"*.py"`.
+
+**Returns:**
+
+*   `List[Dict[str, Any]]`: A list of dictionaries representing search matches, with keys like `file`, `line_number`, `line_content`.
+
+## `repository.chunk_file_by_lines()`
+
+Chunks a file's content based on line count.
+
+```python
+repository.chunk_file_by_lines(file_path: str, max_lines: int = 50) -> List[str]
+```
+
+**Parameters:**
+
+*   `file_path` (str): The path to the file (relative to repo root) to chunk.
+*   `max_lines` (int): The maximum number of lines per chunk. Defaults to `50`.
+
+**Returns:**
+
+*   `List[str]`: A list of strings, where each string is a chunk of the file content.
+
+## `repository.chunk_file_by_symbols()`
+
+Chunks a file's content based on its top-level symbols (functions, classes).
+
+```python
+repository.chunk_file_by_symbols(file_path: str) -> List[Dict[str, Any]]
+```
+
+**Parameters:**
+
+*   `file_path` (str): The path to the file (relative to repo root) to chunk.
+
+**Returns:**
+
+*   `List[Dict[str, Any]]`: A list of dictionaries, each representing a symbol chunk with keys like `name`, `type`, `code`.
+
+## `repository.extract_context_around_line()`
+
+Extracts the surrounding code context (typically the containing function or class) for a specific line number.
+
+```python
+repository.extract_context_around_line(file_path: str, line: int) -> Optional[Dict[str, Any]]
+```
+
+**Parameters:**
+
+*   `file_path` (str): The path to the file (relative to repo root).
+*   `line` (int): The (0-based) line number to find context for.
+
+**Returns:**
+
+*   `Optional[Dict[str, Any]]`: A dictionary representing the symbol context (with keys like `name`, `type`, `code`), or `None` if no context is found.
+
+## `repository.index()`
+
+Builds and returns a comprehensive index of the repository, including both the file tree and all extracted symbols.
+
+```python
+repository.index() -> Dict[str, Any]
+```
+
+**Returns:**
+
+*   `Dict[str, Any]`: A dictionary containing the full index, typically with keys like `file_tree` and `symbols`.
+
+## `repository.get_vector_searcher()`
+
+Initializes and returns the `VectorSearcher` instance for performing semantic search.
+
+```python
+repository.get_vector_searcher(embed_fn=None, backend=None, persist_dir=None) -> VectorSearcher
+```
+
+**Parameters:**
+
+*   `embed_fn` (Callable): **Required on first call.** A function that takes a list of strings and returns a list of embedding vectors.
+*   `backend` (Optional[Any]): Specifies the vector database backend. If `None`, `kit` defaults to using `ChromaDBBackend`.
+*   `persist_dir` (Optional[str]): Path to a directory to persist the vector index. If `None`, the `VectorSearcher` will default to `YOUR_REPO_PATH/.kit/vector_db/` for ChromaDB. Setting to `None` implies using this default persistence path for ChromaDB.
+
+**Returns:**
+
+*   `VectorSearcher`: An instance of the vector searcher configured for this repository.
+
+(See [Configuring Semantic Search](/core-concepts/configuring-semantic-search) for more details.)
+
+## `repository.search_semantic()`
+
+Performs a semantic search query over the indexed codebase.
+
+```python
+repository.search_semantic(query: str, top_k: int = 5, embed_fn=None) -> List[Dict[str, Any]]
+```
+
+**Parameters:**
+
+*   `query` (str): The natural language query to search for.
+*   `top_k` (int): The maximum number of results to return. Defaults to `5`.
+*   `embed_fn` (Callable): Required if the vector searcher hasn't been initialized yet.
+
+**Returns:**
+
+*   `List[Dict[str, Any]]`: A list of dictionaries representing the search results, typically including matched code snippets and relevance scores.
+
+## `repository.find_symbol_usages()`
+
+Finds definitions and references of a specific symbol across the repository.
+
+```python
+repository.find_symbol_usages(symbol_name: str, symbol_type: Optional[str] = None) -> List[Dict[str, Any]]
+```
+
+**Parameters:**
+
+*   `symbol_name` (str): The name of the symbol to find usages for.
+*   `symbol_type` (Optional[str]): Optionally restrict the search to a specific symbol type (e.g., 'function', 'class'). Defaults to `None` (search all types).
+
+**Returns:**
+
+*   `List[Dict[str, Any]]`: A list of dictionaries representing symbol usages, including file, line number, and context/snippet.
+
+## `repository.write_index()`
+
+Writes the full repository index (file tree and symbols) to a JSON file.
+
+```python
+repository.write_index(file_path: str) -> None
+```
+
+**Parameters:**
+
+*   `file_path` (str): The path to the output JSON file.
+
+## `repository.write_symbol_usages()`
+
+Writes the found usages of a specific symbol to a JSON file.
+
+```python
+repository.write_symbol_usages(symbol_name: str, file_path: str, symbol_type: Optional[str] = None) -> None
+```
+
+**Parameters:**
+
+*   `symbol_name` (str): The name of the symbol whose usages were found.
+*   `file_path` (str): The path to the output JSON file.
+*   `symbol_type` (Optional[str]): The symbol type filter used when finding usages. Defaults to `None`.
+
+## `repository.get_context_assembler()`
+
+Convenience helper that returns a fresh `ContextAssembler` bound to this repository.
+Use it instead of importing the class directly:
+
+```python
+assembler = repository.get_context_assembler()
+assembler.add_diff(my_diff)
+context_blob = assembler.format_context()
+```
+
+**Returns:**
+
+* `ContextAssembler`: Ready-to-use assembler instance.
+
+## `repository.get_summarizer()`
+
+### Automatic cleanup of the tmp repo cache
+
+When you work with remote URLs Kit tries to be fast by keeping a shallow clone on disk (default location: `/tmp/kit-repo-cache`).  Over time those can add up, especially in containerised environments.  With `cache_ttl_hours` (or the `KIT_TMP_REPO_TTL_HOURS` env-var) you can make Kit self-purge old clones:
+
+```python
+# Purge anything older than 2 hours, then clone
+repo = Repository(
+    "https://github.com/owner/repo",
+    cache_ttl_hours=2,
+)
+```
+
+**When does the purge run?**
+
+* The very first time `_clone_github_repo` is executed in a Python process (i.e., when the first remote repo is opened).
+* A light-weight helper walks the top-level folders inside the cache directory and removes those whose directory `mtime` is older than the TTL.
+* The helper is wrapped in `functools.lru_cache(maxsize=1)`, so subsequent clones in the same process don't repeat the walk.
+
+If you never set a TTL Kit keeps the previous behavior (clones live until the OS or you remove them).

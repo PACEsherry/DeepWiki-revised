@@ -1,0 +1,422 @@
+---
+title: Semantic Searching
+---
+import { Aside } from '@astrojs/starlight/components';
+
+Semantic search allows you to find code based on meaning rather than just keywords. Kit supports semantic code search using vector embeddings and ChromaDB (both local and cloud), enabling you to search for code using natural language queries.
+
+## How it works
+
+- Chunks your codebase (by symbols or lines)
+- Embeds each chunk using your chosen model (OpenAI, HuggingFace, etc)
+- Stores embeddings in a local ChromaDB vector database
+- Lets you search for code using natural language or code-like queries
+
+## Quick Start
+
+```python
+from kit import Repository
+from sentence_transformers import SentenceTransformer
+
+# Use any embedding model you like
+model = SentenceTransformer("all-MiniLM-L6-v2")
+def embed_fn(texts):
+    return model.encode(texts).tolist()
+
+repo = Repository("/path/to/codebase")
+vs = repo.get_vector_searcher(embed_fn=embed_fn)
+vs.build_index()  # Index all code chunks (run once, or after code changes)
+
+results = repo.search_semantic("How is authentication handled?", embed_fn=embed_fn)
+for hit in results:
+    print(hit["file"], hit.get("name"), hit.get("type"), hit.get("code"))
+# Example output:
+# src/kit/auth.py login function def login(...): ...
+# src/kit/config.py AUTH_CONFIG variable AUTH_CONFIG = {...}
+```
+
+## Configuration
+
+### Required: Embedding Function
+
+You must provide an embedding function (`embed_fn`) when first accessing semantic search features via `repo.get_vector_searcher()` or `repo.search_semantic()`.
+
+This function takes a list of text strings and returns a list of corresponding embedding vectors.
+
+```python
+from kit import Repository
+
+repo = Repository("/path/to/repo")
+
+# Define the embedding function wrapper
+def embed_fn(texts: list[str]) -> list[list[float]]:
+    # Adapt this to your specific embedding library/API
+    return get_embeddings(texts)
+
+# Pass the function when searching
+results = repo.search_semantic("database connection logic", embed_fn=embed_fn)
+
+# Or when getting the searcher explicitly
+vector_searcher = repo.get_vector_searcher(embed_fn=embed_fn)
+```
+
+### Choosing an Embedding Model
+
+`kit` is model-agnostic: pass any function `List[str] -> List[List[float]]`.
+
+#### Local (Open-Source) Models
+
+Use [`sentence-transformers`](https://www.sbert.net/) models for fast, local inference:
+
+```python
+from sentence_transformers import SentenceTransformer
+
+# Popular lightweight model (100 MB-ish download)
+model = SentenceTransformer("all-MiniLM-L6-v2")
+def embed_fn(texts: list[str]) -> list[list[float]]:
+    return model.encode(texts).tolist()
+
+# Or try larger, more accurate models
+model = SentenceTransformer("all-mpnet-base-v2")  # ~420MB, better quality
+```
+
+#### Cloud API Models
+
+Use OpenAI or other cloud embedding services:
+
+```python
+import openai
+
+def embed_fn(texts: list[str]) -> list[list[float]]:
+    """OpenAI embedding function with batching support."""
+    response = openai.embeddings.create(
+        model="text-embedding-3-small", 
+        input=texts
+    )
+    return [data.embedding for data in response.data]
+
+# Alternative: single text fallback for simple APIs
+def embed_fn_single(texts: list[str]) -> list[list[float]]:
+    """If your API only supports single strings."""
+    embeddings = []
+    for text in texts:
+        resp = openai.embeddings.create(model="text-embedding-3-small", input=[text])
+        embeddings.append(resp.data[0].embedding)
+    return embeddings
+```
+
+#### Batching Support
+
+`VectorSearcher` will attempt to call your `embed_fn` with a *list* of texts for efficiency. If your function only supports single strings, it still works (falls back internally).
+
+### Backend Configuration
+
+`kit`'s `VectorSearcher` uses a pluggable backend system for storing and querying vector embeddings. Kit supports both local ChromaDB storage and Chroma Cloud for managed vector databases.
+
+#### Local ChromaDB (Default)
+
+When you initialize `VectorSearcher` without specifying a `backend` argument, `kit` automatically uses an instance of `ChromaDBBackend` for local storage.
+
+**Configuration Options:**
+
+*   **`persist_dir` (Optional[str]):** Specifies where the ChromaDB index will be stored on disk.
+    *   If you provide a path: `repo.get_vector_searcher(persist_dir="./my_index")`
+    *   If no `persist_dir` is specified, defaults to `YOUR_REPO_PATH/.kit/vector_db/`
+    *   Persisting the index allows you to reuse it across sessions without re-indexing
+
+```python
+# Example: Initialize with custom persist directory
+vector_searcher = repo.get_vector_searcher(
+    embed_fn=my_embedding_function, 
+    persist_dir="./my_custom_kit_vector_index"
+)
+
+# Building the index (first time or to update)
+vector_searcher.build_index()
+
+# Later, to reuse the persisted index:
+vector_searcher_reloaded = repo.get_vector_searcher(
+    embed_fn=my_embedding_function, 
+    persist_dir="./my_custom_kit_vector_index"
+)
+results = vector_searcher_reloaded.search("my query")
+```
+
+#### Chroma Cloud (Managed Service)
+
+Kit supports [Chroma Cloud](https://trychroma.com), a fully managed vector database service, as an alternative to local ChromaDB storage. This enables better scalability, team collaboration, and eliminates local storage constraints for large codebases.
+
+**Important:** The API remains exactly the same whether you're using local ChromaDB or Chroma Cloud. The only difference is which Chroma server you're connecting to - a local single-node instance or the managed Cloud service. Your code doesn't need to change, just the environment configuration.
+
+##### Prerequisites
+
+- ChromaDB version 1.0.0 or higher (`pip install chromadb>=1.0.0`)
+- Python 3.10+
+- Chroma Cloud account (sign up at [https://trychroma.com/signup](https://trychroma.com/signup))
+
+##### Configuration
+
+Set the following environment variables to enable Chroma Cloud:
+
+```bash
+# Required: Enable Chroma Cloud backend
+export KIT_USE_CHROMA_CLOUD="true"
+
+# Required: Your Chroma Cloud API key
+export CHROMA_API_KEY="your-api-key-here"
+
+# Required: Your tenant UUID (must be valid UUID format)
+export CHROMA_TENANT="3893b771-b971-4f45-8e30-7aac7837ad7f"
+
+# Required: Your database name (create in dashboard first)
+export CHROMA_DATABASE="kit-codebase-index"
+```
+
+**Note:** The tenant must be a valid UUID. Kit will validate the format and provide a clear error if an invalid tenant is provided. Find your tenant UUID in your [Chroma Cloud dashboard](https://trychroma.com).
+
+##### Usage
+
+Once the environment variables are set, Kit will automatically use Chroma Cloud:
+
+```python
+from kit import Repository
+from kit.vector_searcher import VectorSearcher
+
+# Initialize repository
+repo = Repository("/path/to/repo")
+
+# Create vector searcher - will use Chroma Cloud automatically
+searcher = VectorSearcher(repo, embed_fn=my_embed_function)
+
+# Build index (stored in cloud)
+searcher.build_index()
+
+# Search (queries cloud backend)
+results = searcher.search("find authentication logic", top_k=5)
+```
+
+##### Programmatic Configuration
+
+You can also explicitly create a cloud backend:
+
+```python
+from kit.vector_searcher import ChromaCloudBackend, VectorSearcher
+
+# Create cloud backend explicitly
+backend = ChromaCloudBackend(
+    api_key="your-api-key",
+    tenant="3893b771-b971-4f45-8e30-7aac7837ad7f",  # UUID format
+    database="kit-codebase-index",
+    collection_name="my_project_index"
+)
+
+# Use with VectorSearcher
+searcher = VectorSearcher(repo, embed_fn=my_embed_function, backend=backend)
+```
+
+##### Switching Between Local and Cloud
+
+Kit determines which backend to use based on the `KIT_USE_CHROMA_CLOUD` environment variable:
+
+- **`KIT_USE_CHROMA_CLOUD=true`**: Uses Chroma Cloud (requires `CHROMA_API_KEY`)
+- **`KIT_USE_CHROMA_CLOUD=false` or unset**: Uses local ChromaDB storage
+
+```bash
+# Switch to cloud
+export KIT_USE_CHROMA_CLOUD="true"
+
+# Switch back to local
+export KIT_USE_CHROMA_CLOUD="false"
+# or
+unset KIT_USE_CHROMA_CLOUD
+```
+
+##### Controlling Batch Size
+
+Large repositories can exceed Chroma's API batch limits. Kit automatically
+detects the backend cap and defaults to batches of up to 2000 items, but you can
+override this with the `KIT_CHROMA_BATCH_SIZE` environment variable:
+
+```bash
+export KIT_CHROMA_BATCH_SIZE=1000  # send at most 1000 embeddings per add()
+```
+
+This applies to both local and cloud Chroma backends.
+
+##### Benefits of Chroma Cloud
+
+- **Team Collaboration**: Share indexes across team members
+- **No Storage Limits**: Scale to massive codebases without local disk constraints
+- **Managed Service**: No infrastructure to maintain
+- **Persistence**: Data persists across machines and sessions
+- **Performance**: Optimized cloud infrastructure for vector operations
+
+##### Migration
+
+To migrate from local to cloud:
+1. Set up Chroma Cloud credentials
+2. Rebuild your indexes (they'll be stored in cloud)
+
+To migrate from cloud to local:
+1. Unset `KIT_USE_CHROMA_CLOUD`
+2. Rebuild your indexes locally
+
+#### Other Backends
+
+While the `VectorDBBackend` interface is designed to support other vector databases, ChromaDB (local and cloud) is the primary focus for now. If you need other backends like Faiss, please raise an issue on the kit GitHub repository.
+
+## Usage Patterns
+
+### Chunking Strategy
+
+Control how your code is broken into searchable chunks:
+
+```python
+# Default: chunk by symbols (functions, classes, variables)
+vs.build_index(chunk_by="symbols")
+
+# Alternative: chunk by lines (~50-line blocks)
+vs.build_index(chunk_by="lines")  # Useful for unsupported languages
+```
+
+`chunk_by="symbols"` (default) extracts functions/classes/variables via the existing AST parser. This is usually what you want.
+
+You can re-index at any time; the previous collection is cleared automatically.
+
+### Persisting & Re-using an Index
+
+The index lives under `.kit/vector_db` by default (one Chroma collection per path).
+
+```python
+vs = repo.get_vector_searcher(embed_fn, persist_dir=".kit/my_index")
+vs.build_index()
+# … later …
+searcher = repo.get_vector_searcher(embed_fn, persist_dir=".kit/my_index")
+results = searcher.search("add user authentication")
+```
+
+### Docstring Index
+
+Prefer *meaning-first* search? Instead of embedding raw code you can build an index of LLM-generated summaries:
+
+```text
+DocstringIndexer → SummarySearcher
+```
+
+See **[Docstring-Based Vector Index](/docs/core-concepts/docstring-indexing)** for details.
+
+### Feeding Results to an LLM
+
+Combine `VectorSearcher` with `ContextAssembler` to build an LLM prompt containing only *relevant* code:
+
+```python
+from kit import ContextAssembler
+
+chunks = repo.search_semantic("jwt auth flow", embed_fn=embed_fn, top_k=10)
+assembler = ContextAssembler(max_chars=12_000)
+context = assembler.from_chunks(chunks)
+llm_response = my_llm.chat(prompt + context)
+```
+
+### Advanced Usage Examples
+
+#### Multi-Query Search
+
+```python
+queries = [
+    "database connection setup",
+    "user authentication logic", 
+    "error handling patterns"
+]
+
+all_results = []
+for query in queries:
+    results = repo.search_semantic(query, embed_fn=embed_fn, top_k=5)
+    all_results.extend(results)
+
+# Deduplicate by file path
+unique_files = {r["file"]: r for r in all_results}
+```
+
+#### Filtering Results
+
+```python
+# Search only in specific directories
+results = repo.search_semantic("api endpoints", embed_fn=embed_fn)
+api_results = [r for r in results if "src/api/" in r["file"]]
+
+# Search only for functions
+function_results = [r for r in results if r.get("type") == "function"]
+```
+
+## Best Practices
+
+### Performance Tips
+
+* **Index size**: Indexing a very large monorepo may take minutes. Consider running on CI and committing `.kit/vector_db`.
+* **Chunking**: Use `chunk_by="symbols"` for better semantic boundaries
+* **Model selection**: Balance model size vs. quality based on your needs
+* **Batch embedding**: Use APIs that support batch embedding for better performance
+
+### Search Quality
+
+* **Clean code**: Embeddings are language-agnostic – comments & docs influence similarity too. Clean code/comments improve search.
+* **Query formulation**: Use natural language descriptions of what you're looking for
+* **Combine approaches**: Exact-keyword search (`repo.search_text()`) can still be faster for quick look-ups; combine both techniques.
+
+### Production Considerations
+
+```python
+# Example: Production-ready setup with error handling
+import logging
+
+def safe_semantic_search(repo_path: str, query: str, top_k: int = 5):
+    try:
+        repo = Repository(repo_path)
+        
+        # Check if index exists
+        vector_searcher = repo.get_vector_searcher(embed_fn=embed_fn)
+        
+        # Build index if needed (check if collection is empty)
+        try:
+            test_results = vector_searcher.search("test", top_k=1)
+            if not test_results:
+                logging.info("Building semantic index...")
+                vector_searcher.build_index()
+        except Exception:
+            logging.info("Building semantic index...")
+            vector_searcher.build_index()
+            
+        return repo.search_semantic(query, embed_fn=embed_fn, top_k=top_k)
+        
+    except Exception as e:
+        logging.error(f"Semantic search failed: {e}")
+        # Fallback to text search
+        return repo.search_text(query)
+```
+
+## CLI Support
+
+Semantic search is now available via the `kit search-semantic` command:
+
+```bash
+# Basic semantic search
+kit search-semantic /path/to/repo "authentication logic"
+
+# Advanced options
+kit search-semantic /path/to/repo "error handling patterns" \
+  --top-k 10 \
+  --embedding-model all-mpnet-base-v2 \
+  --chunk-by symbols
+```
+
+See the [CLI documentation](/introduction/cli#kit-search-semantic) for complete usage details.
+
+## Limitations & Future Plans
+
+* **Language support**: Works with any language that kit can parse, but quality depends on symbol extraction
+* **Index management**: Future versions may include index cleanup, optimization, and migration tools
+
+<Aside type="note">
+  For complex production deployments, consider running embedding models on dedicated infrastructure and using the REST API or MCP server for distributed access.
+</Aside>

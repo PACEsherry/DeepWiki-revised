@@ -1,0 +1,214 @@
+---
+title: Code Summarization
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+In addition to the non-LLM based functions of the `Repository` class,
+`kit` also integrates directly with LLMs via the `Summarizer` class to provide intelligent code summarization capabilities. This helps you quickly understand the purpose and functionality of entire code files, specific functions, or classes.
+
+## Basic Usage: Summarizing Files
+
+The primary way to access summarization is through the `Repository` object's `get_summarizer()` factory method.
+
+```python
+import kit
+import os
+
+# Ensure API key is set (replace with your actual key handling)
+# os.environ["OPENAI_API_KEY"] = "YOUR_API_KEY" 
+
+try:
+    # Load the repository
+    repo = kit.Repository("/path/to/your/project")
+
+    # Get the summarizer instance (defaults to OpenAIConfig using env var OPENAI_API_KEY)
+    # See 'Configuration (Advanced)' for using Anthropic or Google.
+    summarizer = repo.get_summarizer()
+
+    # Summarize a specific file
+    file_path = "src/main_logic.py"
+    summary = summarizer.summarize_file(file_path)
+
+    print(f"Summary for {file_path}:\n{summary}")
+
+except Exception as e:
+    print(f"An error occurred with the LLM provider: {e}")
+except Exception as e:
+    print(f"An error occurred: {e}")
+
+```
+
+<Aside type="note">
+  When you call `repo.get_summarizer()` (or instantiate `Summarizer` directly), it will use the appropriate LLM library based on the specified configuration (e.g., `openai`, `anthropic`, `google.genai`). All necessary libraries are included in the standard installation.
+</Aside>
+
+### How it Works
+
+When you call `summarize_file`, `kit` performs the following steps:
+
+1.  Retrieves the content of the specified file using `repo.get_file_content()`.
+2.  Constructs a prompt containing the file content, tailored for code summarization.
+3.  Sends the prompt to the configured LLM provider and model (e.g., OpenAI's GPT-4o).
+4.  Parses the response and returns the summary text.
+
+### Configuration (Advanced)
+
+While environment variables are the default, you can provide specific configuration:
+
+```python
+from kit.summaries import OpenAIConfig, AnthropicConfig, GoogleConfig
+
+# Load repo
+repo = kit.Repository("/path/to/your/project")
+
+# Define custom OpenAI configuration
+openai_custom_config = OpenAIConfig(
+    api_key="sk-...", # Can be omitted if OPENAI_API_KEY is set
+    model="gpt-4.1-mini"
+)
+# Get summarizer with specific OpenAI config
+openai_summarizer = repo.get_summarizer(config=openai_custom_config)
+# Summarize using the custom OpenAI configuration
+openai_summary = openai_summarizer.summarize_file("src/utils_openai.py")
+print(f"OpenAI Summary:\n{openai_summary}")
+```
+
+#### Using OpenAI-Compatible Endpoints
+
+The `OpenAIConfig` also supports a `base_url` parameter, allowing you to use any OpenAI-compatible API (like Grok and OpenRouter). This is useful for accessing alternative providers and models.
+
+**OpenRouter** - Access to hundreds of models through a single API:
+
+```python
+openrouter_config = OpenAIConfig(
+    api_key="YOUR_OPENROUTER_API_KEY",
+    model="meta-llama/llama-3.3-70b-instruct",
+    base_url="https://openrouter.ai/api/v1"
+)
+openrouter_summarizer = repo.get_summarizer(config=openrouter_config)
+```
+
+**Grok (X.AI)** - Access to Grok models:
+
+```python
+grok_config = OpenAIConfig(
+    api_key="YOUR_XAI_API_KEY",
+    model="grok-4-1-fast-reasoning",  # or "grok-code-fast-1", "grok-4", etc.
+    base_url="https://api.x.ai/v1"
+)
+grok_summarizer = repo.get_summarizer(config=grok_config)
+```
+
+#### Additional Configs
+
+```python
+# Define custom Anthropic configuration
+anthropic_config = AnthropicConfig(
+    api_key="sk-ant-...", # Can be omitted if ANTHROPIC_API_KEY is set
+    model="claude-sonnet-4-5"
+)
+
+# Define custom Google configuration
+google_config = GoogleConfig(
+    api_key="AIzaSy...", # Can be omitted if GOOGLE_API_KEY is set
+    model="gemini-2.5-flash"  # Or "gemini-2.5-pro" for advanced reasoning
+)
+```
+
+## Advanced Usage
+
+### Summarizing Functions and Classes
+
+Beyond entire files, you can target specific functions or classes:
+
+```python
+import kit
+
+repo = kit.Repository("/path/to/your/project")
+summarizer = repo.get_summarizer() # Assumes OPENAI_API_KEY is set
+
+# Summarize a specific function
+function_summary = summarizer.summarize_function(
+    file_path="src/core/processing.py", 
+    function_name="process_main_data"
+)
+print(f"Function Summary:\n{function_summary}")
+
+# Summarize a specific class
+class_summary = summarizer.summarize_class(
+    file_path="src/models/user.py",
+    class_name="UserProfile"
+)
+print(f"Class Summary:\n{class_summary}")
+
+```
+
+<Aside type="note">
+  Under the hood, `summarize_function` and `summarize_class` will use `kit`'s symbol extraction capabilities (`repo.extract_symbols`) to locate the precise code snippet for the target function or class before sending it to the LLM, providing more focused summaries.
+</Aside>
+
+### Combining with Other Repository Features
+
+You can combine the `Summarizer` with other `Repository` methods for powerful workflows. For example, find all classes in a file and then summarize each one:
+
+```python
+import kit
+
+repo = kit.Repository("/path/to/your/project")
+summarizer = repo.get_summarizer()
+
+file_to_analyze = "src/services/notification_service.py"
+
+# 1. Find all symbols in the file
+symbols = repo.extract_symbols(file_path=file_to_analyze)
+
+# 2. Filter for classes
+class_symbols = [s for s in symbols if s.get('type') == 'class']
+
+# 3. Summarize each class
+for sym in class_symbols:
+    class_name = sym.get('name')
+    if class_name:
+        print(f"--- Summarizing Class: {class_name} ---")
+        try:
+            summary = summarizer.summarize_class(
+                file_path=file_to_analyze, 
+                class_name=class_name
+            )
+            print(summary)
+        except Exception as e:
+            print(f"Could not summarize {class_name}: {e}")
+    print("\n")
+
+```
+
+<Aside type="note">
+  While `repo.get_summarizer()` is the most convenient way to get a configured `Summarizer`, you can also instantiate it directly if needed:
+
+  ```python
+  from kit import Repository
+  from kit.summaries import Summarizer, OpenAIConfig, AnthropicConfig, GoogleConfig
+
+  my_repo = Repository("/path/to/code")
+  
+  # Example with AnthropicConfig
+  # Similar approach for OpenAIConfig or GoogleConfig
+  my_anthropic_config = AnthropicConfig(
+      api_key="sk-ant-your-key", 
+      model="claude-sonnet-4-5"
+  )
+  direct_summarizer = Summarizer(repo=my_repo, config=my_anthropic_config)
+  
+  # Or for OpenAI:
+  # my_openai_config = OpenAIConfig(api_key="sk-your-key", model="gpt-4o")
+  # direct_summarizer = Summarizer(repo=my_repo, config=my_openai_config)
+  
+  # Or for Google:
+  # my_google_config = GoogleConfig(api_key="AIzaSy-your-key", model="gemini-pro")
+  # direct_summarizer = Summarizer(repo=my_repo, config=my_google_config)
+
+  summary = direct_summarizer.summarize_file("some/file.py")
+  print(summary)
+  ```
+</Aside>
