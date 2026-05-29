@@ -1,0 +1,95 @@
+09:50:21 [INFO] ============================================================
+09:50:21 [INFO] Summary Extraction Pipeline
+09:50:21 [INFO] ============================================================
+09:50:21 [INFO] Repository: /home/sherry/DeepWiki-revised/kit/src/kit
+09:50:21 [INFO] Output: /home/sherry/DeepWiki-revised/summary_output_kit.md
+09:50:21 [INFO] Model: mimo-v2.5-pro
+09:50:21 [INFO] Level: class
+09:50:21 [INFO] 
+[Phase 1] Discovering files...
+09:50:21 [WARNING] Skipping large file cli.py: 89473 chars
+09:50:21 [INFO] Discovered 51 Python files
+09:50:21 [INFO] 
+[Phase 2] Extracting symbols...
+09:50:21 [INFO]   [1/51] api/app.py: 2 classes, 16 functions, 0 methods
+09:50:21 [INFO]   [2/51] api/registry.py: 1 classes, 2 functions, 6 methods
+09:50:21 [INFO]   [3/51] ast_search.py: 2 classes, 1 functions, 11 methods
+09:50:21 [INFO]   [4/51] code_searcher.py: 2 classes, 0 functions, 9 methods
+09:50:21 [INFO]   [5/51] context_extractor.py: 1 classes, 0 functions, 6 methods
+09:50:21 [INFO]   [6/51] deep_research.py: 2 classes, 0 functions, 3 methods
+09:50:21 [INFO]   [7/51] dependency_analyzer/dependency_analyzer.py: 1 classes, 0 functions, 4 methods
+09:50:21 [INFO]   [8/51] dependency_analyzer/go_dependency_analyzer.py: 1 classes, 0 functions, 18 methods
+09:50:21 [INFO]   [9/51] dependency_analyzer/javascript_dependency_analyzer.py: 1 classes, 0 functions, 18 methods
+09:50:21 [INFO]   [10/51] dependency_analyzer/python_dependency_analyzer.py: 1 classes, 0 functions, 16 methods
+09:50:21 [INFO]   [11/51] dependency_analyzer/rust_dependency_analyzer.py: 1 classes, 0 functions, 22 methods
+09:50:21 [INFO]   [12/51] dependency_analyzer/terraform_dependency_analyzer.py: 1 classes, 0 functions, 21 methods
+09:50:21 [INFO]   [13/51] doc_providers.py: 3 classes, 0 functions, 8 methods
+09:50:21 [INFO]   [14/51] docstring_indexer.py: 2 classes, 1 functions, 5 methods
+09:50:21 [INFO]   [15/51] incremental_analyzer.py: 2 classes, 0 functions, 22 methods
+09:50:21 [INFO]   [16/51] llm_client_factory.py: 1 classes, 6 functions, 0 methods
+09:50:21 [INFO]   [17/51] llm_context.py: 1 classes, 0 functions, 5 methods
+09:50:21 [INFO]   [18/51] mcp/__main__.py: 0 classes, 0 functions, 0 methods
+09:50:21 [INFO]   [19/51] mcp/dev.py: 0 classes, 1 functions, 0 methods
+09:50:21 [INFO]   [20/51] mcp/dev_server.py: 21 classes, 1 functions, 32 methods
+09:50:21 [INFO]   [21/51] multi_repo.py: 1 classes, 0 functions, 12 methods
+09:50:21 [INFO]   [22/51] ollama_client.py: 1 classes, 0 functions, 5 methods
+09:50:21 [INFO]   [23/51] package_search.py: 1 classes, 0 functions, 8 methods
+09:50:21 [INFO]   [24/51] pr_review/__main__.py: 0 classes, 0 functions, 0 methods
+09:50:21 [INFO]   [25/51] pr_review/agentic_reviewer.py: 1 classes, 1 functions, 15 methods
+09:50:21 [INFO]   [26/51] pr_review/base_reviewer.py: 1 classes, 0 functions, 7 methods
+09:50:21 [INFO]   [27/51] pr_review/cache.py: 1 classes, 0 functions, 8 methods
+09:50:21 [INFO]   [28/51] pr_review/commit_generator.py: 1 classes, 0 functions, 11 methods
+09:50:21 [INFO]   [29/51] pr_review/config.py: 5 classes, 2 functions, 1 methods
+09:50:21 [INFO]   [30/51] pr_review/cost_tracker.py: 2 classes, 0 functions, 12 methods
+09:50:21 [INFO]   [31/51] pr_review/debug.py: 0 classes, 1 functions, 0 methods
+09:50:21 [INFO]   [32/51] pr_review/diff_parser.py: 3 classes, 0 functions, 4 methods
+09:50:21 [INFO]   [33/51] pr_review/error_utils.py: 0 classes, 1 functions, 0 methods
+09:50:21 [INFO]   [34/51] pr_review/file_prioritizer.py: 1 classes, 0 functions, 0 methods
+09:50:21 [INFO]   [35/51] pr_review/line_ref_fixer.py: 1 classes, 0 functions, 0 methods
+09:50:21 [INFO]   [36/51] pr_review/local_reviewer.py: 2 classes, 0 functions, 22 methods
+09:50:21 [INFO]   [37/51] pr_review/matrix_tester.py: 3 classes, 1 functions, 9 methods
+09:50:21 [INFO]   [38/51] pr_review/priority_filter.py: 0 classes, 10 functions, 0 methods
+09:50:21 [INFO]   [39/51] pr_review/priority_utils.py: 1 classes, 2 functions, 0 methods
+09:50:21 [INFO]   [40/51] pr_review/profile_manager.py: 2 classes, 0 functions, 12 methods
+09:50:21 [INFO]   [41/51] pr_review/reviewer.py: 1 classes, 1 functions, 14 methods
+09:50:21 [INFO]   [42/51] pr_review/summarizer.py: 1 classes, 0 functions, 10 methods
+09:50:21 [INFO]   [43/51] pr_review/test_accuracy.py: 1 classes, 1 functions, 4 methods
+09:50:21 [INFO]   [44/51] pr_review/validator.py: 2 classes, 1 functions, 13 methods
+09:50:21 [INFO]   [45/51] repo_mapper.py: 1 classes, 0 functions, 12 methods
+09:50:21 [INFO]   [46/51] repository.py: 1 classes, 0 functions, 37 methods
+09:50:21 [INFO]   [47/51] summaries.py: 8 classes, 1 functions, 12 methods
+09:50:21 [INFO]   [48/51] tool_schemas.py: 0 classes, 1 functions, 0 methods
+09:50:21 [INFO]   [49/51] tree_sitter_symbol_extractor.py: 2 classes, 0 functions, 1 methods
+09:50:21 [INFO]   [50/51] utils.py: 0 classes, 5 functions, 0 methods
+09:50:21 [INFO]   [51/51] vector_searcher.py: 4 classes, 2 functions, 22 methods
+09:50:21 [INFO] 
+[Phase 3] Generating summaries with LLM...
+09:50:21 [INFO] 
+  [1/51] Processing api/app.py...
+09:50:21 [INFO]     Generating module summary...
+09:50:31 [INFO] HTTP Request: POST https://token-plan-cn.xiaomimimo.com/v1/chat/completions "HTTP/1.1 200 OK"
+09:50:32 [INFO]     Generating class summary: RepoIn...
+09:50:42 [INFO] HTTP Request: POST https://token-plan-cn.xiaomimimo.com/v1/chat/completions "HTTP/1.1 200 OK"
+09:50:42 [INFO]     Generating class summary: FilePathsIn...
+09:50:55 [INFO] HTTP Request: POST https://token-plan-cn.xiaomimimo.com/v1/chat/completions "HTTP/1.1 200 OK"
+09:50:55 [INFO] 
+  [2/51] Processing api/registry.py...
+09:50:55 [INFO]     Generating module summary...
+09:51:09 [INFO] HTTP Request: POST https://token-plan-cn.xiaomimimo.com/v1/chat/completions "HTTP/1.1 200 OK"
+09:51:10 [INFO]     Generating class summary: PersistentRepoRegistry...
+09:51:23 [INFO] HTTP Request: POST https://token-plan-cn.xiaomimimo.com/v1/chat/completions "HTTP/1.1 200 OK"
+09:51:23 [INFO] 
+  [3/51] Processing ast_search.py...
+09:51:23 [INFO]     Generating module summary...
+09:51:33 [INFO] HTTP Request: POST https://token-plan-cn.xiaomimimo.com/v1/chat/completions "HTTP/1.1 200 OK"
+09:51:33 [INFO]     Generating class summary: ASTPattern...
+09:51:45 [INFO] HTTP Request: POST https://token-plan-cn.xiaomimimo.com/v1/chat/completions "HTTP/1.1 200 OK"
+09:51:45 [INFO]     Generating class summary: ASTSearcher...
+09:51:56 [INFO] HTTP Request: POST https://token-plan-cn.xiaomimimo.com/v1/chat/completions "HTTP/1.1 200 OK"
+09:51:56 [INFO] 
+  [4/51] Processing code_searcher.py...
+09:51:56 [INFO]     Generating module summary...
+09:52:09 [INFO] HTTP Request: POST https://token-plan-cn.xiaomimimo.com/v1/chat/completions "HTTP/1.1 200 OK"
+09:52:09 [INFO]     Generating class summary: SearchOptions...
+09:52:20 [INFO] HTTP Request: POST https://token-plan-cn.xiaomimimo.com/v1/chat/completions "HTTP/1.1 200 OK"
+09:52:20 [INFO]     Generating class summary: CodeSearcher...
